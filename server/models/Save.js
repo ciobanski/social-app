@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-
+const { applyTZTransform } = require('./Utils');
 const saveSchema = new mongoose.Schema(
   {
     user: {
@@ -18,5 +18,7 @@ const saveSchema = new mongoose.Schema(
 
 // Ensure one save per user/post pair
 saveSchema.index({ user: 1, post: 1 }, { unique: true });
+
+applyTZTransform(saveSchema);
 
 module.exports = mongoose.model('Save', saveSchema);

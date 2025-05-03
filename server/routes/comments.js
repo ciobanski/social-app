@@ -1,27 +1,55 @@
 const express = require('express');
 const Comment = require('../models/Comment');
 const authMiddleware = require('../middleware/auth');
-
+const User = require('../models/User');
+const Notification = require('../models/Notification');
 const router = express.Router();
 
 // ── Create a comment or reply ───────────────────────────────────────────────
-// POST /api/comments
+// ── Create a comment with mention notifications ─────────────────────────────────
 router.post('/', authMiddleware, async (req, res) => {
   try {
-    const { post, content, parentComment } = req.body;
-    if (!post || !content) {
-      return res.status(400).json({ message: 'Post ID and content are required' });
-    }
+    const { postId, content, parentComment } = req.body;
+
+    // 1) Create the comment
     const comment = await Comment.create({
-      post,
       author: req.user._id,
-      parentComment: parentComment || null,
-      content
+      post: postId,
+      content,
+      parentComment: parentComment || null
     });
-    // populate author for the response
-    await comment.populate('author', 'name avatarUrl');
+
+    // 2) Parse @mentions and notify
+    const mentions = (content.match(/@([A-Za-z0-9_]+)/g) || [])
+      .map(m => m.slice(1).toLowerCase());
+
+    for (let uname of mentions) {
+      const mentionedUser = await User.findOne({ email: new RegExp(`^${uname}@`, 'i') });
+      if (!mentionedUser) continue;
+
+      await Notification.create({
+        user: mentionedUser._id,
+        type: 'mention',
+        entity: {
+          from: req.user._id,
+          post: postId,
+          comment: comment._id
+        }
+      });
+
+      const io = req.app.get('io');
+      io.to(mentionedUser._id.toString()).emit('notification', {
+        type: 'mention',
+        from: req.user._id,
+        post: postId,
+        comment: comment._id,
+        timestamp: new Date()
+      });
+    }
+
     res.status(201).json(comment);
   } catch (err) {
+    console.error('Create comment error:', err);
     res.status(500).json({ message: err.message });
   }
 });

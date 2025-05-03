@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-
+const { applyTZTransform } = require('./Utils');
 const postSchema = new mongoose.Schema(
   {
     author: {
@@ -17,5 +17,13 @@ const postSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+postSchema.add({
+  hashtags: [{ type: String, index: true }]  // simple array of tag names
+});
+
+postSchema.index({ content: 'text' }, { name: 'PostContentTextIndex' });
+
+applyTZTransform(postSchema);
 
 module.exports = mongoose.model('Post', postSchema);

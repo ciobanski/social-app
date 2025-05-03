@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-
+const { applyTZTransform } = require('./Utils');
 const commentSchema = new mongoose.Schema(
   {
     post: {
@@ -26,5 +26,7 @@ const commentSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+applyTZTransform(commentSchema);
 
 module.exports = mongoose.model('Comment', commentSchema);

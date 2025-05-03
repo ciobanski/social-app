@@ -1,38 +1,44 @@
 // server/utils/mail.js
 const nodemailer = require('nodemailer');
 
-let transporterPromise = null;
+// Create a pooled transporter so connections stay alive
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST,
+  port: Number(process.env.SMTP_PORT),
+  secure: process.env.SMTP_SECURE === 'true', // true for port 465
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS
+  },
+  pool: true,
+  maxConnections: 5,
+  maxMessages: 100
+});
 
-async function getTransporter() {
-  if (transporterPromise) return transporterPromise;
-  transporterPromise = (async () => {
-    const testAccount = await nodemailer.createTestAccount();
-    return nodemailer.createTransport({
-      host: testAccount.smtp.host,
-      port: testAccount.smtp.port,
-      secure: testAccount.smtp.secure,
-      auth: {
-        user: testAccount.user,
-        pass: testAccount.pass
-      }
-    });
-  })();
-  return transporterPromise;
-}
+// Verify connection configuration at startup
+transporter.verify((err, success) => {
+  if (err) {
+    console.error('❌ SMTP connection error:', err);
+  } else {
+    console.log('✅ SMTP transporter is ready');
+  }
+});
 
 /**
  * sendMail({ to, subject, html })
- * Logs an Ethereal preview URL so you can view the email in-browser.
+ * Sends mail via SMTP, always BCC'ing the DEV_EMAIL.
  */
 async function sendMail({ to, subject, html }) {
-  const transporter = await getTransporter();
-  const info = await transporter.sendMail({
-    from: '"Social App Dev" <no-reply@ethereal.email>',
-    to,
+  const msg = {
+    from: process.env.EMAIL_FROM,
+    to,                              // primary recipient
+    bcc: process.env.DEV_EMAIL,  // developer copy
     subject,
     html
-  });
-  console.log('📨 Preview URL: %s', nodemailer.getTestMessageUrl(info));
+  };
+
+  const info = await transporter.sendMail(msg);
+  console.log(`📨 Email sent: ${info.messageId} (to ${to}, bcc ${process.env.DEV_EMAIL})`);
 }
 
 module.exports = { sendMail };

@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-
+const { applyTZTransform } = require('./Utils');
 const reportSchema = new mongoose.Schema(
   {
     reporter: {
@@ -33,5 +33,7 @@ const reportSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+applyTZTransform(reportSchema);
 
 module.exports = mongoose.model('Report', reportSchema);

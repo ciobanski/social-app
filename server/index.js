@@ -6,6 +6,7 @@ const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const passport = require('passport');
+const cookieParser = require('cookie-parser');
 require('./config/passport'); // Google OAuth
 
 // Models
@@ -15,6 +16,7 @@ const Message = require('./models/Message');
 // Routes
 const authRoutes = require('./routes/auth');
 const postRoutes = require('./routes/posts');
+const trendingRoutes = require('./routes/trending');
 const commentRoutes = require('./routes/comments');
 const reportRoutes = require('./routes/reports');
 const adminRoutes = require('./routes/admin');
@@ -23,15 +25,22 @@ const likeRoutes = require('./routes/likes');
 const saveRoutes = require('./routes/saves');
 const hashtagRoutes = require('./routes/hashtags');
 const messageRoutes = require('./routes/messages');
+const shareRoutes = require('./routes/shares');
+const searchRoutes = require('./routes/search');
+const storiesRoutes = require('./routes/stories');
+const friendsRoutes = require('./routes/friends');
 
 const app = express();
 const server = http.createServer(app);
 const { Server } = require('socket.io');
 const io = new Server(server, { cors: { origin: '*' } });
+// **Expose io to routes via req.app**
+app.set('io', io);
 
 // ── Global Middleware ─────────────────────────────────────────────────────────
-app.use(cors());
+app.use(cors({ origin: 'http://localhost:3000', credentials: true }));
 app.use(express.json());
+app.use(cookieParser());
 app.use(passport.initialize());
 
 // ── Admin Seeding ─────────────────────────────────────────────────────────────
@@ -72,7 +81,11 @@ app.use('/api', likeRoutes);
 app.use('/api', saveRoutes);
 app.use('/api/hashtags', hashtagRoutes);
 app.use('/api/messages', messageRoutes);
-
+app.use('/api/shares', shareRoutes);
+app.use('/api/search', searchRoutes);
+app.use('/api/trending', trendingRoutes);
+app.use('/api/stories', storiesRoutes);
+app.use('/api/friends', friendsRoutes);
 // ── Health Check ─────────────────────────────────────────────────────────────
 app.get('/', (req, res) => res.send('API is up and running!'));
 

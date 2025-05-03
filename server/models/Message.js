@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-
+const { applyTZTransform } = require('./Utils');
 const messageSchema = new mongoose.Schema(
   {
     from: {
@@ -20,5 +20,7 @@ const messageSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+applyTZTransform(messageSchema);
 
 module.exports = mongoose.model('Message', messageSchema);
