@@ -1,3 +1,5 @@
+// routes/auth.js
+
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -13,7 +15,7 @@ const router = express.Router();
 // Password strength: ≥8 chars, 1 uppercase, 1 number
 const passwordRegex = /^(?=.*[A-Z])(?=.*\d).{8,}$/;
 
-// ── POST /api/auth/signup ────────────────────────────────────────────────────
+// ── POST /api/auth/signup ────────────────────────────────────────────────
 router.post('/signup', async (req, res) => {
   try {
     const { firstName, lastName, email, password } = req.body;
@@ -75,7 +77,7 @@ router.post('/signup', async (req, res) => {
   }
 });
 
-// ── GET /api/auth/verify-email ───────────────────────────────────────────────
+// ── GET /api/auth/verify-email ────────────────────────────────────────────
 router.get('/verify-email', async (req, res) => {
   try {
     const { token } = req.query;
@@ -100,7 +102,7 @@ router.get('/verify-email', async (req, res) => {
   }
 });
 
-// ── POST /api/auth/login ─────────────────────────────────────────────────────
+// ── POST /api/auth/login ──────────────────────────────────────────────────
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -115,11 +117,17 @@ router.post('/login', async (req, res) => {
     const isMatch = await bcrypt.compare(password, user.passwordHash);
     if (!isMatch) return res.status(401).json({ message: 'Invalid credentials' });
 
+    // Issue JWT
     const token = jwt.sign(
       { userId: user._id, role: user.role },
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
+
+    // Record login event
+    const LoginEvent = require('../models/LoginEvent');
+    await LoginEvent.create({ user: user._id });
+
     res.json({
       token,
       user: {
@@ -136,7 +144,7 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// ── GET /api/auth/me ─────────────────────────────────────────────────────────
+// ── GET /api/auth/me ───────────────────────────────────────────────────────
 router.get('/me', authMiddleware, (req, res) => {
   const u = req.user;
   res.json({
@@ -150,7 +158,7 @@ router.get('/me', authMiddleware, (req, res) => {
   });
 });
 
-// ── Google OAuth ──────────────────────────────────────────────────────────────
+// ── Google OAuth ─────────────────────────────────────────────────────────────
 router.get(
   '/google',
   passport.authenticate('google', { scope: ['profile', 'email'] })
@@ -178,7 +186,7 @@ router.get(
   }
 );
 
-// ── POST /api/auth/request-password-reset ───────────────────────────────────
+// ── POST /api/auth/request-password-reset ─────────────────────────────────
 router.post('/request-password-reset', async (req, res) => {
   try {
     const { email } = req.body;
@@ -205,7 +213,7 @@ router.post('/request-password-reset', async (req, res) => {
   }
 });
 
-// ── POST /api/auth/reset-password ───────────────────────────────────────────
+// ── POST /api/auth/reset-password ─────────────────────────────────────────
 router.post('/reset-password', async (req, res) => {
   try {
     const { token, newPassword } = req.body;
@@ -238,7 +246,7 @@ router.post('/reset-password', async (req, res) => {
   }
 });
 
-// ── POST /api/auth/request-2fa ───────────────────────────────────────────────
+// ── POST /api/auth/request-2fa ─────────────────────────────────────────────
 router.post('/request-2fa', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
@@ -273,7 +281,7 @@ router.post('/request-2fa', authMiddleware, async (req, res) => {
   }
 });
 
-// ── POST /api/auth/verify-2fa ────────────────────────────────────────────────
+// ── POST /api/auth/verify-2fa ───────────────────────────────────────────────
 router.post('/verify-2fa', authMiddleware, async (req, res) => {
   try {
     const { code } = req.body;
@@ -335,7 +343,7 @@ router.post('/verify-2fa', authMiddleware, async (req, res) => {
   }
 });
 
-// ── POST /api/auth/refresh-token ────────────────────────────────────────────
+// ── POST /api/auth/refresh-token ───────────────────────────────────────────
 router.post('/refresh-token', async (req, res) => {
   try {
     const { refreshToken } = req.body;
@@ -371,7 +379,7 @@ router.post('/refresh-token', async (req, res) => {
   }
 });
 
-// ── POST /api/auth/logout ───────────────────────────────────────────────────
+// ── POST /api/auth/logout ─────────────────────────────────────────────────
 router.post('/logout', authMiddleware, async (req, res) => {
   try {
     const { refreshToken } = req.body;

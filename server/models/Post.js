@@ -1,5 +1,7 @@
+// models/Post.js
 const mongoose = require('mongoose');
 const { applyTZTransform } = require('./Utils');
+
 const postSchema = new mongoose.Schema(
   {
     author: {
@@ -10,20 +12,26 @@ const postSchema = new mongoose.Schema(
     content: {
       type: String,
       trim: true,
-      maxlength: 280  // like a tweet; adjust as you see fit
+      maxlength: 280
     },
-    imageUrl: String,  // will store your S3 URL after upload
-    hashtags: [String], // e.g. ['travel', 'sunset']
+    imageUrl: String,
+    hashtags: [String],
+
+    // ← add this:
+    visibility: {
+      type: String,
+      enum: ['public', 'friends', 'private'],
+      default: 'public'
+    }
   },
   { timestamps: true }
 );
 
+// retain your existing indexes/transforms:
 postSchema.add({
-  hashtags: [{ type: String, index: true }]  // simple array of tag names
+  hashtags: [{ type: String, index: true }]
 });
-
 postSchema.index({ content: 'text' }, { name: 'PostContentTextIndex' });
-
 applyTZTransform(postSchema);
 
 module.exports = mongoose.model('Post', postSchema);

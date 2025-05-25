@@ -1,31 +1,42 @@
+// routes/posts.js
+
 const express = require('express');
 const Post = require('../models/Post');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
-const authMiddleware = require('../middleware/auth');
 const Hashtag = require('../models/Hashtag');
+const authMiddleware = require('../middleware/auth');
+const { canViewPost } = require('../utils/privacy');
 const router = express.Router();
 
 // ── Create a new post ───────────────────────────────────────────────
-// ── Create a new post with mention notifications ───────────────────────────────
 router.post('/', authMiddleware, async (req, res) => {
   try {
-    const { content, imageUrl, hashtags } = req.body;
+    const { content, imageUrl, hashtags, visibility } = req.body;
 
-    // Derive tags as before...
+    // Derive tags from content if none provided
     let tags = Array.isArray(hashtags) ? hashtags : [];
     if ((!tags || tags.length === 0) && content) {
       tags = (content.match(/#(\w+)/g) || [])
         .map(tag => tag.slice(1).toLowerCase());
     }
-    // Upsert hashtags omitted here for brevity...
 
-    // 1) Create the post
+    // Upsert hashtags collection (optional)
+    for (let tagName of tags) {
+      await Hashtag.findOneAndUpdate(
+        { name: tagName },
+        { $inc: { count: 1 } },
+        { upsert: true }
+      );
+    }
+
+    // 1) Create the post, including visibility
     const post = await Post.create({
       author: req.user._id,
       content,
       imageUrl,
-      hashtags: tags
+      hashtags: tags,
+      visibility       // 'public' | 'friends' | 'private'
     });
 
     // 2) Parse @mentions and notify
@@ -33,7 +44,7 @@ router.post('/', authMiddleware, async (req, res) => {
       .map(m => m.slice(1).toLowerCase());
 
     for (let uname of mentions) {
-      // Assuming your “username” is the local-part of email
+      // Assuming username is local-part of email
       const mentionedUser = await User.findOne({ email: new RegExp(`^${uname}@`, 'i') });
       if (!mentionedUser) continue;
 
@@ -64,15 +75,22 @@ router.post('/', authMiddleware, async (req, res) => {
   }
 });
 
-// ── Get all posts (feed) ───────────────────────────────────────────
-// GET /api/posts
+// ── Get feed ────────────────────────────────────────────────────────
 router.get('/', authMiddleware, async (req, res) => {
   try {
-    const posts = await Post.find()
+    const allPosts = await Post.find()
       .sort({ createdAt: -1 })
       .limit(20)
       .populate('author', 'firstName lastName avatarUrl');
-    res.json(posts);
+
+    const visible = [];
+    for (let post of allPosts) {
+      if (await canViewPost(req.user._id, post)) {
+        visible.push(post);
+      }
+    }
+
+    res.json(visible);
   } catch (err) {
     console.error('Get feed error:', err);
     res.status(500).json({ message: err.message });
@@ -80,12 +98,16 @@ router.get('/', authMiddleware, async (req, res) => {
 });
 
 // ── Get a single post ──────────────────────────────────────────────
-// GET /api/posts/:id
 router.get('/:id', authMiddleware, async (req, res) => {
   try {
     const post = await Post.findById(req.params.id)
       .populate('author', 'firstName lastName avatarUrl');
     if (!post) return res.status(404).json({ message: 'Post not found' });
+
+    if (!await canViewPost(req.user._id, post)) {
+      return res.status(403).json({ message: 'Not authorized to view this post' });
+    }
+
     res.json(post);
   } catch (err) {
     console.error('Get post error:', err);
@@ -94,7 +116,6 @@ router.get('/:id', authMiddleware, async (req, res) => {
 });
 
 // ── Delete a post ─────────────────────────────────────────────────
-// DELETE /api/posts/:id
 router.delete('/:id', authMiddleware, async (req, res) => {
   try {
     const post = await Post.findById(req.params.id);

@@ -1,5 +1,8 @@
+// models/User.js
+
 const mongoose = require('mongoose');
 const { applyTZTransform } = require('./Utils');
+
 const userSchema = new mongoose.Schema(
   {
     // ── Name fields ────────────────────────────────────────────────
@@ -42,7 +45,14 @@ const userSchema = new mongoose.Schema(
       default: 'user'
     },
 
-    // ── Email verification ───────────────────────────────────
+    // ── Country  ────────────────────────────────────────────────────
+    country: {
+      type: String,
+      trim: true,
+      maxlength: 56
+    },
+
+    // ── Email verification ─────────────────────────────────────────
     isVerified: {
       type: Boolean,
       default: false
@@ -50,11 +60,11 @@ const userSchema = new mongoose.Schema(
     verifyToken: String,
     verifyTokenExpires: Date,
 
-    // ── Password reset ──────────────────────────────────────
+    // ── Password reset ─────────────────────────────────────────────
     resetPasswordToken: String,
     resetPasswordExpires: Date,
 
-    // ── Two-factor via email OTP ────────────────────────────
+    // ── Two-factor via email OTP ──────────────────────────────────
     twoFactorEnabled: {
       type: Boolean,
       default: true
@@ -62,7 +72,7 @@ const userSchema = new mongoose.Schema(
     twoFactorCode: String,
     twoFactorCodeExpires: Date,
 
-    // ── Trusted devices for 2FA ─────────────────────────────
+    // ── Trusted devices for 2FA ───────────────────────────────────
     trustedDevices: [
       {
         deviceId: {
@@ -76,7 +86,7 @@ const userSchema = new mongoose.Schema(
       }
     ],
 
-    // ── Refresh tokens ──────────────────────────────────────
+    // ── Refresh tokens ─────────────────────────────────────────────
     refreshTokens: [
       {
         token: String,
@@ -84,8 +94,7 @@ const userSchema = new mongoose.Schema(
       }
     ],
 
-    // ── Friend system ─────────────────────────────────────────
-    // Incoming requests
+    // ── Friend system ─────────────────────────────────────────────
     friendRequests: [
       {
         from: {
@@ -99,16 +108,26 @@ const userSchema = new mongoose.Schema(
         }
       }
     ],
-    // Established friends
     friends: [
       {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User'
       }
-    ]
+    ],
 
+    // ── Birthday & privacy ─────────────────────────────────────────
+    birthday: Date,
+    birthdayVisibility: {
+      type: String,
+      enum: ['public', 'friends', 'private'],
+      default: 'friends'
+    },
+
+    // ── Presence tracking ──────────────────────────────────────────────
+    lastSeen: {
+      type: Date
+    }
   },
-
 
   { timestamps: true }
 );
@@ -118,11 +137,13 @@ userSchema.virtual('fullName').get(function () {
   return `${this.firstName} ${this.lastName}`;
 });
 
+// Text index for search
 userSchema.index(
   { firstName: 'text', lastName: 'text', email: 'text' },
   { name: 'UserTextIndex' }
 );
 
+// Apply your timezone transform for JSON output
 applyTZTransform(userSchema);
 
 module.exports = mongoose.model('User', userSchema);
