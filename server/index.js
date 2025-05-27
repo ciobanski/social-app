@@ -44,7 +44,24 @@ const onlineUsers = new Set();
 app.set('onlineUsers', onlineUsers);
 
 // ── Global Middleware ─────────────────────────────────────────
-app.use(cors({ origin: 'http://localhost:3000', credentials: true }));
+// Allow any http://localhost:<port> origin
+const localhostRegex = /^http:\/\/localhost:\d+$/;
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (mobile apps, curl, postman)
+      if (!origin) return callback(null, true);
+
+      if (localhostRegex.test(origin)) {
+        return callback(null, true);
+      }
+      callback(new Error('Not allowed by CORS'));
+    },
+    credentials: true
+  })
+);
+
 app.use(express.json());
 app.use(cookieParser());
 app.use(passport.initialize());

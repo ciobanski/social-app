@@ -55,6 +55,7 @@ router.post('/signup', async (req, res) => {
     await user.save();
 
     // Send verification email
+
     const link = `${process.env.BACKEND_URL}/api/auth/verify-email?token=${user.verifyToken}`;
     await sendMail({
       to: user.email,
