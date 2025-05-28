@@ -46,7 +46,7 @@ router.post('/', authMiddleware, async (req, res) => {
         timestamp: new Date()
       });
     }
-
+    await comment.populate('author', 'firstName lastName avatarUrl');
     res.status(201).json(comment);
   } catch (err) {
     console.error('Create comment error:', err);
@@ -60,7 +60,7 @@ router.get('/post/:postId', authMiddleware, async (req, res) => {
   try {
     const comments = await Comment.find({ post: req.params.postId })
       .sort({ createdAt: 1 })               // oldest first
-      .populate('author', 'name avatarUrl');
+      .populate('author', 'firstName lastName avatarUrl')
     res.json(comments);
   } catch (err) {
     res.status(500).json({ message: err.message });

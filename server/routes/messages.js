@@ -9,7 +9,7 @@ const router = express.Router();
  * Fetch last 50 messages between req.user and otherUserId, oldest→newest
  */
 router.get('/:otherUserId', auth, async (req, res) => {
-  const userId = req.user._id;
+  const userId = req.user._id; t
   const other = req.params.otherUserId;
   const messages = await Message.find({
     $or: [
