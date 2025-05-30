@@ -1,4 +1,3 @@
-// src/Routes.jsx
 import React, { useContext, Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthContext } from './AuthContext';
@@ -18,6 +17,7 @@ export default function AppRoutes() {
     <Suspense fallback={<div>Loading…</div>}>
       {user ? (
         <Routes>
+          {/* Layout with Header + Outlet */}
           <Route element={<Layout />}>
             <Route path="/" element={<FeedPage />} />
             <Route path="/profile/:id" element={<ProfilePage />} />

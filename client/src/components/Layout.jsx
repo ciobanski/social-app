@@ -1,27 +1,53 @@
 // src/components/Layout.jsx
 import React from 'react';
-import { Box } from '@mui/material';
+import { Box, Toolbar, IconButton } from '@mui/material';
+import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline';
 import { Outlet } from 'react-router-dom';
-import Navbar from './Navbar';
-import { ToastContainer } from 'react-toastify';
+import Header from './Header';
 
 export default function Layout() {
   return (
-    <Box>
-      <ToastContainer
-        position="top-right"
-        autoClose={3000}
-        hideProgressBar={false}
-        newestOnTop={false}
-        closeOnClick
-        pauseOnHover
-        draggable
-        theme="colored"
-      />
-      <Navbar />
-      <Box component="main" sx={{ mt: 2, p: 2 }}>
+    <>
+      {/* Full-width fixed header */}
+      <Header />
+
+      {/* Spacer to sit below AppBar */}
+      <Toolbar variant="dense" />
+
+      {/* Main content area */}
+      <Box
+        component="main"
+        sx={{
+          width: '100%',
+          pt: 2,
+          px: 2,
+          pb: 4,
+          overflowX: 'hidden'
+        }}
+      >
         <Outlet />
+
+        {/* Chat bubble on small screens, bottom-left */}
+        <Box
+          sx={{
+            position: 'fixed',
+            bottom: 16,
+            left: 16,
+            display: { xs: 'block', md: 'none' }
+          }}
+        >
+          <IconButton
+            color="primary"
+            sx={{
+              bgcolor: 'background.paper',
+              '&:hover': { bgcolor: 'background.paper' },
+              boxShadow: 3
+            }}
+          >
+            <ChatBubbleOutlineIcon />
+          </IconButton>
+        </Box>
       </Box>
-    </Box>
+    </>
   );
 }

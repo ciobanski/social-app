@@ -1,79 +1,100 @@
-// routes/posts.js
 const express = require('express');
+const multer = require('multer');
+const { postStorage } = require('../config/cloudinary');
+const authMiddleware = require('../middleware/auth');
 const Post = require('../models/Post');
-const Like = require('../models/Like');           // ← add this
-const Comment = require('../models/Comment');     // ← and this
+const Like = require('../models/Like');
+const Comment = require('../models/Comment');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
 const Hashtag = require('../models/Hashtag');
-const authMiddleware = require('../middleware/auth');
 const { canViewPost } = require('../utils/privacy');
 
 const router = express.Router();
 
-// ── Create a new post ───────────────────────────────────────────────
-router.post('/', authMiddleware, async (req, res) => {
-  try {
-    const { content, imageUrl, hashtags, visibility } = req.body;
+// accept up to 15 images under field name 'images'
+const upload = multer({ storage: postStorage }).array('images', 15);
 
-    let tags = Array.isArray(hashtags) ? hashtags : [];
-    if ((!tags || tags.length === 0) && content) {
-      tags = (content.match(/#(\w+)/g) || []).map(t => t.slice(1).toLowerCase());
+// ── Create a new post (with 0–15 images) ───────────────────────
+router.post('/', authMiddleware, async (req, res, next) => {
+  // wrap multer in a promise so we can await it inside our async handler
+  upload(req, res, async err => {
+    if (err) {
+      // MulterError or other upload error
+      console.error('Multer error:', err);
+      return res.status(400).json({ message: err.message });
     }
-    for (let tagName of tags) {
-      await Hashtag.findOneAndUpdate(
-        { name: tagName },
-        { $inc: { count: 1 } },
-        { upsert: true }
-      );
-    }
+    try {
+      const { content, visibility } = req.body;
 
-    // Create the post
-    let post = await Post.create({
-      author: req.user._id,
-      content,
-      imageUrl,
-      hashtags: tags,
-      visibility
-    });
+      // build hashtags array
+      let tags = Array.isArray(req.body.hashtags)
+        ? req.body.hashtags
+        : [];
+      if (!tags.length && content) {
+        tags = (content.match(/#(\w+)/g) || [])
+          .map(t => t.slice(1).toLowerCase());
+      }
+      for (let name of tags) {
+        await Hashtag.findOneAndUpdate(
+          { name },
+          { $inc: { count: 1 } },
+          { upsert: true }
+        );
+      }
 
-    // Mentions (unchanged)
-    const mentions = (content.match(/@([A-Za-z0-9_]+)/g) || []).map(m => m.slice(1).toLowerCase());
-    for (let uname of mentions) {
-      const mentionedUser = await User.findOne({ email: new RegExp(`^${uname}@`, 'i') });
-      if (!mentionedUser) continue;
-      await Notification.create({
-        user: mentionedUser._id,
-        type: 'mention',
-        entity: { from: req.user._id, post: post._id }
+      // collect all uploaded image URLs (Cloudinary paths)
+      const imageUrls = (req.files || []).map(f => f.path);
+
+      // create the post
+      let post = await Post.create({
+        author: req.user._id,
+        content,
+        imageUrls,
+        hashtags: tags,
+        visibility
       });
-      const io = req.app.get('io');
-      io.to(mentionedUser._id.toString()).emit('notification', {
-        type: 'mention',
-        from: req.user._id,
-        post: post._id,
-        timestamp: new Date()
-      });
-    }
 
-    // Populate author and send enriched post
-    await post.populate('author', 'firstName lastName avatarUrl');
-    res.status(201).json({
-      ...post.toObject(),
-      likeCount: 0,
-      commentCount: 0,
-      liked: false
-    });
-  } catch (err) {
-    console.error('Create post error:', err);
-    res.status(500).json({ message: err.message });
-  }
+      // handle @mentions
+      const mentions = (content.match(/@([A-Za-z0-9_]+)/g) || [])
+        .map(m => m.slice(1).toLowerCase());
+      for (let uname of mentions) {
+        const mentionedUser = await User.findOne({
+          email: new RegExp(`^${uname}@`, 'i')
+        });
+        if (!mentionedUser) continue;
+        await Notification.create({
+          user: mentionedUser._id,
+          type: 'mention',
+          entity: { from: req.user._id, post: post._id }
+        });
+        const io = req.app.get('io');
+        io.to(mentionedUser._id.toString()).emit('notification', {
+          type: 'mention',
+          from: req.user._id,
+          post: post._id,
+          timestamp: new Date()
+        });
+      }
+
+      // populate author, inject meta, and respond
+      await post.populate('author', 'firstName lastName avatarUrl');
+      res.status(201).json({
+        ...post.toObject(),
+        likeCount: 0,
+        commentCount: 0,
+        liked: false
+      });
+    } catch (err) {
+      console.error('Create post error:', err);
+      next(err);
+    }
+  });
 });
 
-// ── Get feed ────────────────────────────────────────────────────────
+// ── Get feed (with counts & liked flag) ────────────────────────
 router.get('/', authMiddleware, async (req, res) => {
   try {
-    // 1) fetch latest 20 posts as Mongoose docs
     const allPosts = await Post.find()
       .sort({ createdAt: -1 })
       .limit(20)
@@ -81,17 +102,14 @@ router.get('/', authMiddleware, async (req, res) => {
 
     const visible = [];
     for (let post of allPosts) {
-      // 2) privacy check
       if (!(await canViewPost(req.user._id, post))) continue;
 
-      // 3) like & comment counts + whether current user liked
       const [likeCount, commentCount, liked] = await Promise.all([
         Like.countDocuments({ post: post._id }),
         Comment.countDocuments({ post: post._id }),
         Like.exists({ post: post._id, user: req.user._id })
       ]);
 
-      // 4) toObject + inject fields
       visible.push({
         ...post.toObject(),
         likeCount,
@@ -107,7 +125,7 @@ router.get('/', authMiddleware, async (req, res) => {
   }
 });
 
-// ── Get a single post ──────────────────────────────────────────────
+// ── Get single post ────────────────────────────────────────────
 router.get('/:id', authMiddleware, async (req, res) => {
   try {
     const post = await Post.findById(req.params.id)
@@ -133,7 +151,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
   }
 });
 
-// ── Delete a post ─────────────────────────────────────────────────
+// ── Delete a post ─────────────────────────────────────────────
 router.delete('/:id', authMiddleware, async (req, res) => {
   try {
     const post = await Post.findById(req.params.id);

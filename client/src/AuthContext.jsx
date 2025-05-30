@@ -11,7 +11,8 @@ export default function AuthProvider({ children }) {
   async function loadMe() {
     try {
       const { data } = await api.get('/auth/me');
-      setUser(data.user);
+      // /auth/me returns the user fields at top-level, not under `user`
+      setUser(data.user ?? data);
     } catch {
       setUser(null);
     } finally {
@@ -23,9 +24,20 @@ export default function AuthProvider({ children }) {
     loadMe();
   }, []);
 
+  // <-- ADD this:
+  const logout = async () => {
+    try {
+      await api.post('/auth/logout');
+    } catch {
+      // ignore
+    }
+    localStorage.removeItem('token');
+    setUser(null);
+  };
+
   return (
-    <AuthContext.Provider value={{ user, setUser, reload: loadMe }}>
-      {loading ? <div className="p-4">Loading…</div> : children}
+    <AuthContext.Provider value={{ user, setUser, reload: loadMe, logout }}>
+      {loading ? <div>Loading…</div> : children}
     </AuthContext.Provider>
   );
 }

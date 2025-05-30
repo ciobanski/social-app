@@ -1,4 +1,3 @@
-// models/Post.js
 const mongoose = require('mongoose');
 const { applyTZTransform } = require('./Utils');
 
@@ -14,10 +13,12 @@ const postSchema = new mongoose.Schema(
       trim: true,
       maxlength: 280
     },
-    imageUrl: String,
+
+    // replace single imageUrl with an array
+    imageUrls: [String],
+
     hashtags: [String],
 
-    // ← add this:
     visibility: {
       type: String,
       enum: ['public', 'friends', 'private'],
@@ -27,7 +28,7 @@ const postSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// retain your existing indexes/transforms:
+// indexes/transforms
 postSchema.add({
   hashtags: [{ type: String, index: true }]
 });
