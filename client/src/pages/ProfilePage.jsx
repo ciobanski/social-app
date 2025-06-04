@@ -22,7 +22,7 @@ import {
 import dayjs from 'dayjs';
 import customParseFormat from 'dayjs/plugin/customParseFormat';
 import { toast } from 'react-toastify';
-import { AuthContext } from '../AuthContext';
+import AuthContext from '../AuthContext';
 import EditProfileModal from '../components/EditProfileModal';
 
 dayjs.extend(customParseFormat);

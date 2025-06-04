@@ -13,7 +13,7 @@ import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import SettingsIcon from '@mui/icons-material/Settings';
 import LogoutIcon from '@mui/icons-material/Logout';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
-import { AuthContext } from '../AuthContext';
+import AuthContext from '../AuthContext';
 
 const Search = styled('div')(({ theme }) => ({
   position: 'relative',

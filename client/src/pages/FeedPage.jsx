@@ -1,10 +1,6 @@
 // src/pages/FeedPage.jsx
-import React, {
-  useEffect,
-  useState,
-  useContext,
-  useCallback
-} from 'react';
+
+import React, { useEffect, useState, useContext, useCallback } from 'react';
 import {
   Fab,
   Box,
@@ -21,7 +17,7 @@ import {
   Skeleton,
   Divider,
   Dialog,
-  DialogContent
+  DialogContent,
 } from '@mui/material';
 import {
   Favorite as FavoriteIcon,
@@ -29,9 +25,9 @@ import {
   ChatBubbleOutline as CommentIcon,
   PhotoCamera as PhotoCameraIcon,
   ArrowUpward as ArrowUpwardIcon,
+  ChevronLeft as ChevronLeftIcon,
+  ChevronRight as ChevronRightIcon,
   Close as CloseIcon,
-  ArrowBackIosNew as ArrowBackIosNewIcon,
-  ArrowForwardIos as ArrowForwardIosIcon
 } from '@mui/icons-material';
 import { Link as RouterLink } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
@@ -42,67 +38,82 @@ import customParseFormat from 'dayjs/plugin/customParseFormat';
 import { useDropzone } from 'react-dropzone';
 import { api } from '../api';
 import { toast } from 'react-toastify';
-import { AuthContext } from '../AuthContext';
+import AuthContext from '../AuthContext';
 
 import ProfileSidebar from '../components/ProfileSidebar';
 import FriendsSidebar from '../components/FriendsSidebar';
 
 dayjs.extend(customParseFormat);
 
-// allow empty text or images, but not both
-const postSchema = yup.object({ content: yup.string() }).required();
+// Validation: allow empty string because image-only posts are permitted
+const postSchema = yup
+  .object({
+    content: yup.string().nullable(),
+  })
+  .required();
 
 export default function FeedPage() {
-  const { user } = useContext(AuthContext);
-
+  const { user, authLoading } = useContext(AuthContext);
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [commentsState, setCommentsState] = useState({});
   const [showScroll, setShowScroll] = useState(false);
 
-  // for drag/drop & multi-file upload
-  const [imageFiles, setImageFiles] = useState([]);           // File[]
-  const [imagePreviews, setImagePreviews] = useState([]);     // string[]
+  // New-post preview state
+  const [imageFiles, setImageFiles] = useState([]); // File[]
+  const [imagePreviews, setImagePreviews] = useState([]); // object URLs
 
-  // carousel index per post
-  const [carouselIdx, setCarouselIdx] = useState({});         // { [postId]: number }
-
-  // lightbox
+  // Lightbox state
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxSrc, setLightboxSrc] = useState('');
 
-  // dropzone only on camera icon
-  const onDrop = useCallback(acceptedFiles => {
-    if (!acceptedFiles.length) return;
-    if (imageFiles.length + acceptedFiles.length > 15) {
-      return toast.error('Maximum 15 images allowed');
-    }
-    setImageFiles(files => [...files, ...acceptedFiles]);
-    setImagePreviews(prev => [
-      ...prev,
-      ...acceptedFiles.map(f => URL.createObjectURL(f))
-    ]);
-  }, [imageFiles]);
+  // "See more" expansion
+  const [expandedPosts, setExpandedPosts] = useState({}); // { [postId]: bool }
 
-  const { getRootProps, getInputProps } = useDropzone({
+  // Carousel indices per post
+  const [carouselIndices, setCarouselIndices] = useState({}); // { [postId]: index }
+
+  // Dropzone for entire "new post" Paper container
+  const onDrop = useCallback(
+    (acceptedFiles) => {
+      const total = imageFiles.length + acceptedFiles.length;
+      if (total > 15) {
+        toast.error('Maximum of 15 photos allowed.');
+        return;
+      }
+      const imgs = acceptedFiles.filter((f) => f.type.startsWith('image/'));
+      if (!imgs.length) return;
+      const newPreviews = imgs.map((f) => URL.createObjectURL(f));
+      setImageFiles((prev) => [...prev, ...imgs]);
+      setImagePreviews((prev) => [...prev, ...newPreviews]);
+    },
+    [imageFiles]
+  );
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: { 'image/*': [] },
-    multiple: true
+    multiple: true,
   });
 
-  // form setup
   const {
     control,
     handleSubmit,
     reset,
-    formState: { errors, isSubmitting }
+    formState: { errors, isSubmitting },
   } = useForm({
     resolver: yupResolver(postSchema),
-    defaultValues: { content: '' }
+    defaultValues: { content: '' },
   });
 
-  // load feed
+  // Load feed (only when user is non-null)
   useEffect(() => {
+    if (authLoading) return; // wait until auth resolved
+    if (!user) {
+      setPosts([]);
+      setLoading(false);
+      return;
+    }
+
     (async () => {
       setLoading(true);
       try {
@@ -110,55 +121,58 @@ export default function FeedPage() {
         setPosts(data);
       } catch {
         toast.error('Failed to load posts');
+        setPosts([]);
       } finally {
         setLoading(false);
       }
     })();
-  }, [user]);
+  }, [user, authLoading]);
 
-  // scroll-to-top control
+  // Scroll-to-top control
   useEffect(() => {
     const onScroll = () => setShowScroll(window.pageYOffset > 300);
     window.addEventListener('scroll', onScroll);
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  // handle new post
+  // Create new post (text + images)
   const onPost = async ({ content }) => {
-    if (!content.trim() && imageFiles.length === 0) {
-      return toast.error('Please add text or at least one image');
+    const trimmed = content?.trim() || '';
+    if (!trimmed && imageFiles.length === 0) {
+      return toast.error('Please add text or at least one image.');
     }
     try {
       let res;
-      if (imageFiles.length) {
+      if (imageFiles.length > 0) {
         const form = new FormData();
-        form.append('content', content);
-        imageFiles.forEach(f => form.append('images', f));
+        form.append('content', trimmed);
+        imageFiles.forEach((file) => form.append('images', file));
         res = await api.post('/posts', form, {
-          headers: { 'Content-Type': 'multipart/form-data' }
+          headers: { 'Content-Type': 'multipart/form-data' },
         });
       } else {
-        res = await api.post('/posts', { content });
+        res = await api.post('/posts', { content: trimmed });
       }
-      setPosts(prev => [res.data, ...prev]);
-      reset();                    // clear text
-      setImageFiles([]);          // clear files
-      setImagePreviews([]);       // clear previews
+      setPosts((prev) => [res.data, ...prev]);
+      reset();
+      imageFiles.forEach((f) => URL.revokeObjectURL(f));
+      setImageFiles([]);
+      setImagePreviews([]);
       toast.success('Posted!');
     } catch {
       toast.error('Could not create post');
     }
   };
 
-  // like/unlike
-  const handleLike = async postId => {
-    const p = posts.find(x => x._id === postId);
+  // Like/unlike a post
+  const handleLike = async (postId) => {
+    const p = posts.find((x) => x._id === postId);
     if (!p) return;
     try {
       if (p.liked) {
         await api.delete(`/posts/${postId}/like`);
-        setPosts(ps =>
-          ps.map(x =>
+        setPosts((ps) =>
+          ps.map((x) =>
             x._id === postId
               ? { ...x, liked: false, likeCount: x.likeCount - 1 }
               : x
@@ -166,8 +180,8 @@ export default function FeedPage() {
         );
       } else {
         await api.post(`/posts/${postId}/like`);
-        setPosts(ps =>
-          ps.map(x =>
+        setPosts((ps) =>
+          ps.map((x) =>
             x._id === postId
               ? { ...x, liked: true, likeCount: x.likeCount + 1 }
               : x
@@ -179,18 +193,18 @@ export default function FeedPage() {
     }
   };
 
-  // comments toggle & load
-  const toggleComments = postId => {
-    setCommentsState(s => {
-      const cs = s[postId] || { open: false, comments: [], input: '' };
+  // Toggle & load comments for a post
+  const toggleComments = (postId) => {
+    setCommentsState((s) => {
+      const cs = s[postId] || { open: false, comments: [], input: '', parentComment: null };
       const open = !cs.open;
       if (open && !cs.comments.length) {
         api
           .get(`/comments/post/${postId}`)
-          .then(res =>
-            setCommentsState(prev => ({
+          .then((res) =>
+            setCommentsState((prev) => ({
               ...prev,
-              [postId]: { ...cs, open, comments: res.data }
+              [postId]: { ...cs, open, comments: res.data },
             }))
           )
           .catch(() => toast.error('Failed to load comments'));
@@ -198,10 +212,10 @@ export default function FeedPage() {
       return { ...s, [postId]: { ...cs, open } };
     });
   };
-  const handleCommentChange = (postId, v) =>
-    setCommentsState(s => ({
+  const handleCommentChange = (postId, value) =>
+    setCommentsState((s) => ({
       ...s,
-      [postId]: { ...(s[postId] || {}), input: v }
+      [postId]: { ...(s[postId] || {}), input: value },
     }));
   const handleCommentSubmit = async (e, postId) => {
     e.preventDefault();
@@ -211,18 +225,18 @@ export default function FeedPage() {
       const { data: newC } = await api.post('/comments', {
         postId,
         content: cs.input.trim(),
-        parentComment: null
+        parentComment: cs.parentComment || null,
       });
-      setCommentsState(prev => ({
+      setCommentsState((prev) => ({
         ...prev,
         [postId]: {
           ...cs,
           comments: [...cs.comments, newC],
-          input: ''
-        }
+          input: '',
+        },
       }));
-      setPosts(ps =>
-        ps.map(x =>
+      setPosts((ps) =>
+        ps.map((x) =>
           x._id === postId
             ? { ...x, commentCount: x.commentCount + 1 }
             : x
@@ -234,39 +248,91 @@ export default function FeedPage() {
     }
   };
 
-  // format date
-  const formatDate = raw => {
+  // Truncate text and "See more"
+  const TRUNCATE_LENGTH = 200;
+  const isTruncated = (text) => text.length > TRUNCATE_LENGTH;
+  const displayText = (post) => {
+    const full = post.content || '';
+    if (expandedPosts[post._id] || !isTruncated(full)) return full;
+    return full.slice(0, TRUNCATE_LENGTH) + '…';
+  };
+  const toggleExpand = (postId) => {
+    setExpandedPosts((prev) => ({
+      ...prev,
+      [postId]: !prev[postId],
+    }));
+  };
+
+  // Date formatting
+  const formatDate = (raw) => {
     let d = dayjs(raw, 'DD-MM-YYYY HH:mm:ss', true);
     if (!d.isValid()) d = dayjs(raw);
     return d.isValid() ? d.format('MMM D, YYYY h:mm A') : 'Invalid date';
   };
 
-  // remove a previewed image
-  const handleRemoveImage = idx => {
-    setImageFiles(files => files.filter((_, i) => i !== idx));
-    setImagePreviews(prev => prev.filter((_, i) => i !== idx));
-  };
+  // Clean up previews on unmount
+  useEffect(() => {
+    return () => {
+      imagePreviews.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [imagePreviews]);
+
+  // If auth still loading, render nothing here
+  if (authLoading) return null;
+  // If not logged in, you might redirect or simply show an empty feed placeholder
+  if (!user) {
+    return (
+      <Typography variant="h6" sx={{ p: 2, textAlign: 'center' }}>
+        Please log in to see the feed.
+      </Typography>
+    );
+  }
 
   return (
     <Box
       sx={{
         display: 'grid',
-        gridTemplateColumns: { xs: '1fr', md: '1fr 2fr 1fr' },
+        gridTemplateColumns: { xs: '1fr', md: '2fr 4fr 2fr' },
+        gap: 2,
         width: '100%',
-        gap: 2
+        px: { xs: 1, sm: 2, md: 3, lg: 4 },
       }}
     >
-      {/* Left sidebar */}
-      <Box sx={{ display: { xs: 'none', md: 'block' } }}>
+      {/* Left Sidebar */}
+      <Box
+        sx={{
+          display: { xs: 'none', md: 'block' },
+          // Push the sidebar to stick top
+          position: 'sticky',
+          top: 80,
+          alignSelf: 'start',
+        }}
+      >
         <ProfileSidebar />
       </Box>
 
-      {/* Main feed */}
-      <Box>
-        {/* Post composer */}
-        <Paper sx={{ p: 2, mb: 4 }}>
+      {/* Main Feed */}
+      <Box
+        sx={{
+          mx: 'auto',
+          width: '100%',
+          maxWidth: { xs: '100%', sm: 600, md: '100%' },
+        }}
+      >
+        {/* New Post Paper (dropzone covers entire area) */}
+        <Paper
+          sx={{
+            p: 2,
+            mb: 4,
+            position: 'relative',
+            cursor: 'pointer',
+            backgroundColor: 'background.paper',
+          }}
+          {...getRootProps()}
+        >
+          <input {...getInputProps()} />
           <form onSubmit={handleSubmit(onPost)}>
-            {/* text input */}
+            {/* Text area */}
             <Controller
               name="content"
               control={control}
@@ -279,67 +345,175 @@ export default function FeedPage() {
                   fullWidth
                   error={!!errors.content}
                   helperText={errors.content?.message}
+                  sx={{ pr: 6, minHeight: 80, maxHeight: 200, resize: 'vertical', overflow: 'auto' }}
                 />
               )}
             />
 
-            {/* previews row */}
+            {/* Character counter (0/2000 style) */}
+            <Box
+              sx={{
+                position: 'absolute',
+                top: 16,
+                right: 16,
+                fontSize: '0.75rem',
+                color:
+                  (control._formValues.content || '').length > 2000
+                    ? 'error.main'
+                    : 'text.secondary',
+                animation:
+                  (control._formValues.content || '').length > 2000
+                    ? 'shake 0.3s'
+                    : 'none',
+              }}
+            >
+              {(control._formValues.content || '').length}/2000
+            </Box>
+
+            {/* Image Previews: show up to 5 thumbnails */}
             {imagePreviews.length > 0 && (
               <Box
-                mt={1}
-                mb={1}
                 sx={{
                   display: 'flex',
+                  flexWrap: 'wrap',
                   gap: 1,
-                  overflowX: 'auto'
+                  mt: 1,
                 }}
               >
-                {imagePreviews.map((src, idx) => (
-                  <Box key={idx} sx={{ position: 'relative' }}>
+                {imagePreviews.slice(0, 4).map((src, idx) => (
+                  <Box
+                    key={idx}
+                    sx={{
+                      position: 'relative',
+                      width: 80,
+                      height: 80,
+                      borderRadius: 1,
+                      overflow: 'hidden',
+                      bgcolor: 'grey.800',
+                    }}
+                  >
                     <Box
                       component="img"
                       src={src}
-                      alt={`preview ${idx}`}
+                      alt={`preview-${idx}`}
                       sx={{
-                        width: 80,
-                        height: 80,
+                        width: '100%',
+                        height: '100%',
                         objectFit: 'cover',
-                        borderRadius: 1
                       }}
                     />
                     <IconButton
                       size="small"
-                      onClick={() => handleRemoveImage(idx)}
+                      onClick={() => {
+                        setImageFiles((files) => files.filter((_, i) => i !== idx));
+                        setImagePreviews((prev) => prev.filter((_, i) => i !== idx));
+                      }}
                       sx={{
                         position: 'absolute',
-                        top: -6,
-                        right: -6,
-                        bgcolor: 'background.paper'
+                        top: 2,
+                        right: 2,
+                        bgcolor: 'rgba(0,0,0,0.6)',
+                        '&:hover': { bgcolor: 'rgba(0,0,0,0.8)' },
                       }}
                     >
                       <CloseIcon fontSize="small" />
                     </IconButton>
                   </Box>
                 ))}
+
+                {imagePreviews.length > 5 && (
+                  <Box
+                    sx={{
+                      position: 'relative',
+                      width: 80,
+                      height: 80,
+                      borderRadius: 1,
+                      overflow: 'hidden',
+                      bgcolor: 'grey.800',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'white',
+                      fontWeight: 'bold',
+                    }}
+                  >
+                    +{imagePreviews.length - 4}
+                  </Box>
+                )}
+
+                {imagePreviews.length === 5 && (
+                  <Box
+                    sx={{
+                      position: 'relative',
+                      width: 80,
+                      height: 80,
+                      borderRadius: 1,
+                      overflow: 'hidden',
+                      bgcolor: 'grey.800',
+                    }}
+                  >
+                    <Box
+                      component="img"
+                      src={imagePreviews[4]}
+                      alt="preview-4"
+                      sx={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                      }}
+                    />
+                    <IconButton
+                      size="small"
+                      onClick={() => {
+                        setImageFiles((files) => files.filter((_, i) => i !== 4));
+                        setImagePreviews((prev) => prev.filter((_, i) => i !== 4));
+                      }}
+                      sx={{
+                        position: 'absolute',
+                        top: 2,
+                        right: 2,
+                        bgcolor: 'rgba(0,0,0,0.6)',
+                        '&:hover': { bgcolor: 'rgba(0,0,0,0.8)' },
+                      }}
+                    >
+                      <CloseIcon fontSize="small" />
+                    </IconButton>
+                  </Box>
+                )}
               </Box>
             )}
 
-            {/* bottom bar */}
+            {/* Bottom bar: Camera icon & Post button */}
             <Box
               sx={{
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                mt: 1
+                mt: 1,
               }}
             >
-              {/* only camera icon is dropzone */}
-              <Box {...getRootProps()} sx={{ display: 'flex', alignItems: 'center' }}>
-                <input {...getInputProps()} />
-                <IconButton size="large">
-                  <PhotoCameraIcon />
-                </IconButton>
-              </Box>
+              <IconButton size="large">
+                <PhotoCameraIcon />
+              </IconButton>
+              {isDragActive && (
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    bgcolor: 'rgba(255,255,255,0.1)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    border: '2px dashed',
+                    borderColor: 'primary.main',
+                  }}
+                >
+                  <Typography>Drop images here</Typography>
+                </Box>
+              )}
 
               <Button type="submit" variant="contained" disabled={isSubmitting}>
                 {isSubmitting ? 'Posting…' : 'Post'}
@@ -348,25 +522,47 @@ export default function FeedPage() {
           </form>
         </Paper>
 
-        {/* feed */}
+        {/* Feed Posts */}
         {loading
-          ? [0, 1, 2].map(i => (
+          ? [0, 1, 2].map((i) => (
             <Card sx={{ mb: 2 }} key={i}>
               <Skeleton variant="rectangular" height={200} />
             </Card>
           ))
-          : posts.map(post => {
+          : posts.map((post) => {
             const cs = commentsState[post._id] || {
               open: false,
               comments: [],
-              input: ''
+              input: '',
+              parentComment: null,
             };
-            const imgs = post.imageUrls || [];
-            const idx = carouselIdx[post._id] || 0;
+            const images = post.imageUrls || [];
+            const idx = carouselIndices[post._id] || 0;
+
+            const goPrev = () => {
+              setCarouselIndices((prev) => ({
+                ...prev,
+                [post._id]: Math.max(idx - 1, 0),
+              }));
+            };
+            const goNext = () => {
+              setCarouselIndices((prev) => ({
+                ...prev,
+                [post._id]: Math.min(idx + 1, images.length - 1),
+              }));
+            };
+
             return (
               <Card sx={{ mb: 2 }} key={post._id}>
                 <CardHeader
-                  avatar={<Avatar src={post.author.avatarUrl} />}
+                  avatar={
+                    <RouterLink
+                      to={`/profile/${post.author._id}`}
+                      style={{ textDecoration: 'none' }}
+                    >
+                      <Avatar src={post.author.avatarUrl} />
+                    </RouterLink>
+                  }
                   title={
                     <RouterLink
                       to={`/profile/${post.author._id}`}
@@ -383,63 +579,97 @@ export default function FeedPage() {
                   sx={{ px: 2, pt: 2, pb: 1 }}
                 />
 
-                {/* carousel, if any */}
-                {imgs.length > 0 && (
-                  <Box sx={{ position: 'relative', px: 2, pb: 1 }}>
+                {/* Carousel for multiple images */}
+                {images.length > 0 && (
+                  <Box
+                    sx={{
+                      position: 'relative',
+                      width: '100%',
+                      bgcolor: 'black',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      overflow: 'hidden',
+                    }}
+                  >
                     <Box
                       component="img"
-                      src={imgs[idx]}
-                      alt={`post-img-${idx}`}
+                      src={images[idx]}
+                      alt={`img-${idx}`}
                       sx={{
                         width: '100%',
-                        height: 300,
+                        height: 'auto',
                         objectFit: 'contain',
-                        cursor: 'pointer'
+                        maxHeight: 400,
+                        cursor: 'pointer',
                       }}
                       onClick={() => {
-                        setLightboxSrc(imgs[idx]);
+                        setLightboxSrc(images[idx]);
                         setLightboxOpen(true);
                       }}
                     />
-                    {imgs.length > 1 && (
-                      <>
-                        <IconButton
-                          onClick={() => {
-                            const prev = (idx - 1 + imgs.length) % imgs.length;
-                            setCarouselIdx(ci => ({ ...ci, [post._id]: prev }));
-                          }}
-                          sx={{
-                            position: 'absolute',
-                            top: '50%',
-                            left: 8,
-                            transform: 'translateY(-50%)',
-                            bgcolor: 'background.paper'
-                          }}
-                        >
-                          <ArrowBackIosNewIcon fontSize="small" />
-                        </IconButton>
-                        <IconButton
-                          onClick={() => {
-                            const nxt = (idx + 1) % imgs.length;
-                            setCarouselIdx(ci => ({ ...ci, [post._id]: nxt }));
-                          }}
-                          sx={{
-                            position: 'absolute',
-                            top: '50%',
-                            right: 8,
-                            transform: 'translateY(-50%)',
-                            bgcolor: 'background.paper'
-                          }}
-                        >
-                          <ArrowForwardIosIcon fontSize="small" />
-                        </IconButton>
-                      </>
+                    {idx > 0 && (
+                      <IconButton
+                        size="large"
+                        onClick={goPrev}
+                        sx={{
+                          position: 'absolute',
+                          left: 8,
+                          color: 'white',
+                          bgcolor: 'rgba(0,0,0,0.4)',
+                          '&:hover': { bgcolor: 'rgba(0,0,0,0.6)' },
+                        }}
+                      >
+                        <ChevronLeftIcon />
+                      </IconButton>
                     )}
+                    {idx < images.length - 1 && (
+                      <IconButton
+                        size="large"
+                        onClick={goNext}
+                        sx={{
+                          position: 'absolute',
+                          right: 8,
+                          color: 'white',
+                          bgcolor: 'rgba(0,0,0,0.4)',
+                          '&:hover': { bgcolor: 'rgba(0,0,0,0.6)' },
+                        }}
+                      >
+                        <ChevronRightIcon />
+                      </IconButton>
+                    )}
+                    <Box
+                      sx={{
+                        position: 'absolute',
+                        bottom: 8,
+                        right: 8,
+                        bgcolor: 'rgba(0,0,0,0.6)',
+                        color: 'white',
+                        px: 1,
+                        py: 0.5,
+                        borderRadius: 1,
+                        fontSize: '0.75rem',
+                      }}
+                    >
+                      {idx + 1}/{images.length}
+                    </Box>
                   </Box>
                 )}
 
+                {/* Text content with "See more" */}
                 <CardContent sx={{ textAlign: 'left', px: 2 }}>
-                  <Typography>{post.content}</Typography>
+                  <Typography>
+                    {displayText(post)}
+                    {isTruncated(post.content || '') && (
+                      <Button
+                        size="small"
+                        onClick={() => toggleExpand(post._id)}
+                        sx={{ ml: 1, textTransform: 'none' }}
+                      >
+                        {expandedPosts[post._id] ? 'See less' : 'See more'}
+                      </Button>
+                    )}
+                  </Typography>
                 </CardContent>
 
                 <CardActions disableSpacing sx={{ px: 2 }}>
@@ -456,11 +686,10 @@ export default function FeedPage() {
                   <IconButton onClick={() => toggleComments(post._id)}>
                     <CommentIcon />
                   </IconButton>
-                  <Typography variant="body2">
-                    {post.commentCount}
-                  </Typography>
+                  <Typography variant="body2">{post.commentCount}</Typography>
                 </CardActions>
 
+                {/* Comments section */}
                 {cs.open && (
                   <Box sx={{ px: 2, pb: 2 }}>
                     <Divider sx={{ mb: 2 }} />
@@ -468,10 +697,10 @@ export default function FeedPage() {
                       sx={{
                         maxHeight: 3 * 60,
                         overflowY: 'auto',
-                        pr: 1
+                        pr: 1,
                       }}
                     >
-                      {cs.comments.map((c, idx) => (
+                      {cs.comments.map((c, idx2) => (
                         <Box
                           key={c._id}
                           sx={{ mb: 2, position: 'relative' }}
@@ -483,21 +712,21 @@ export default function FeedPage() {
                               height: 32,
                               position: 'absolute',
                               top: 0,
-                              left: 0
+                              left: 0,
                             }}
                           />
                           <Box sx={{ ml: 5, pl: 1 }}>
                             <Box
                               sx={{
                                 display: 'flex',
-                                alignItems: 'baseline'
+                                alignItems: 'baseline',
                               }}
                             >
                               <RouterLink
                                 to={`/profile/${c.author._id}`}
                                 style={{
                                   textDecoration: 'none',
-                                  color: 'inherit'
+                                  color: 'inherit',
                                 }}
                               >
                                 <Typography
@@ -518,20 +747,25 @@ export default function FeedPage() {
                             </Box>
                             <Typography
                               variant="body2"
-                              sx={{ mt: 0.5, textAlign: 'left' }}
+                              sx={{
+                                mt: 0.5,
+                                textAlign: 'left',
+                              }}
                             >
                               {c.content}
                             </Typography>
+                            {/* Comment Like/Unlike and Replies (if you add UI here) */}
                           </Box>
-                          {idx < cs.comments.length - 1 && (
+                          {idx2 < cs.comments.length - 1 && (
                             <Divider sx={{ mt: 3 }} />
                           )}
                         </Box>
                       ))}
                     </Box>
+                    {/* New comment form */}
                     <Box
                       component="form"
-                      onSubmit={e =>
+                      onSubmit={(e) =>
                         handleCommentSubmit(e, post._id)
                       }
                       sx={{ display: 'flex', gap: 1, mt: 1 }}
@@ -542,7 +776,7 @@ export default function FeedPage() {
                         size="small"
                         fullWidth
                         value={cs.input}
-                        onChange={e =>
+                        onChange={(e) =>
                           handleCommentChange(
                             post._id,
                             e.target.value
@@ -570,7 +804,7 @@ export default function FeedPage() {
               position: 'fixed',
               bottom: 16,
               right: 16,
-              zIndex: theme => theme.zIndex.tooltip
+              zIndex: (theme) => theme.zIndex.tooltip,
             }}
           >
             <ArrowUpwardIcon />
@@ -578,12 +812,19 @@ export default function FeedPage() {
         )}
       </Box>
 
-      {/* Right sidebar */}
-      <Box sx={{ display: { xs: 'none', md: 'block' } }}>
+      {/* Right Sidebar */}
+      <Box
+        sx={{
+          display: { xs: 'none', md: 'block' },
+          position: 'sticky',
+          top: 80,
+          alignSelf: 'start',
+        }}
+      >
         <FriendsSidebar />
       </Box>
 
-      {/* Lightbox */}
+      {/* Lightbox Dialog */}
       <Dialog
         open={lightboxOpen}
         onClose={() => setLightboxOpen(false)}
@@ -594,11 +835,7 @@ export default function FeedPage() {
             component="img"
             src={lightboxSrc}
             alt="full"
-            sx={{
-              width: '100%',
-              height: 'auto',
-              objectFit: 'contain'
-            }}
+            sx={{ width: '100%', height: 'auto', objectFit: 'contain' }}
           />
         </DialogContent>
       </Dialog>

@@ -2,7 +2,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
-import AuthProvider from './AuthContext.jsx';
+import AuthContext, { AuthProvider } from './AuthContext';
 import SocketProvider from './contexts/SocketContext.jsx'; // or wherever yours lives
 import App from './App.jsx';
 import './index.css';

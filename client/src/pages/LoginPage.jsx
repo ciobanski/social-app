@@ -1,24 +1,23 @@
 // src/pages/LoginPage.jsx
-import React, { useContext } from 'react';
+import React, { useContext } from 'react'
 import {
   Box,
   Paper,
   Typography,
   TextField,
   Button,
-  Link as MuiLink
-} from '@mui/material';
-import { Link, useNavigate } from 'react-router-dom';
-import { useForm, Controller } from 'react-hook-form';
-import { yupResolver } from '@hookform/resolvers/yup';
-import * as yup from 'yup';
-import { AuthContext } from '../AuthContext';
-import { api } from '../api';
-import { toast } from 'react-toastify';
+  Link as MuiLink,
+} from '@mui/material'
+import { Link, useNavigate } from 'react-router-dom'
+import { useForm, Controller } from 'react-hook-form'
+import { yupResolver } from '@hookform/resolvers/yup'
+import * as yup from 'yup'
+import AuthContext from '../AuthContext'
+import { toast } from 'react-toastify'
 
 const BG_URL =
   'https://images.unsplash.com/photo-1633886038302-9710437f6ca2?' +
-  'q=80&w=1932&auto=format&fit=crop';
+  'q=80&w=1932&auto=format&fit=crop'
 
 const schema = yup
   .object({
@@ -26,31 +25,34 @@ const schema = yup
     password: yup
       .string()
       .min(6, 'Password must be at least 6 characters')
-      .required('Password is required')
+      .required('Password is required'),
   })
-  .required();
+  .required()
 
 export default function LoginPage() {
-  const { setUser, reload } = useContext(AuthContext);
-  const navigate = useNavigate();
+  const { login, authLoading } = useContext(AuthContext)
+  const navigate = useNavigate()
+
   const {
     control,
     handleSubmit,
-    formState: { errors, isSubmitting }
-  } = useForm({ resolver: yupResolver(schema) });
+    formState: { errors, isSubmitting },
+  } = useForm({ resolver: yupResolver(schema) })
 
   const onSubmit = async (data) => {
-    try {
-      const { data: res } = await api.post('/auth/login', data);
-      localStorage.setItem('token', res.token);
-      setUser(res.user);
-      reload();
-      toast.success('Logged in successfully!');
-      navigate('/');
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Login failed');
+    // data = { email, password }
+    const result = await login(data.email, data.password)
+    if (!result.success) {
+      // show the backend‐sent error (or generic) in a toast
+      toast.error(result.message || 'Login failed')
+      return
     }
-  };
+    toast.success('Logged in successfully!')
+    navigate('/')
+  }
+
+  // If AuthContext is still checking an existing token, show nothing (or a spinner)
+  if (authLoading) return null
 
   return (
     <Box
@@ -60,7 +62,7 @@ export default function LoginPage() {
         backgroundImage: `url(${BG_URL})`,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat'
+        backgroundRepeat: 'no-repeat',
       }}
     >
       <Box
@@ -69,7 +71,7 @@ export default function LoginPage() {
           width: '100%',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'center'
+          justifyContent: 'center',
         }}
       >
         <Paper
@@ -80,7 +82,7 @@ export default function LoginPage() {
             bgcolor: 'background.paper',
             backdropFilter: 'blur(8px)',
             p: 4,
-            borderRadius: 2
+            borderRadius: 2,
           }}
         >
           <Typography variant="h4" align="center" gutterBottom>
@@ -111,13 +113,13 @@ export default function LoginPage() {
                     sx={{
                       '& .MuiFilledInput-root': {
                         borderRadius: '4px',
-                        bgcolor: 'rgba(255,255,255,0.1)'
+                        bgcolor: 'rgba(255,255,255,0.1)',
                       },
                       '& .MuiFilledInput-input:-webkit-autofill': {
                         WebkitBoxShadow: `0 0 0 1000px rgba(255,255,255,0.1) inset`,
                         WebkitTextFillColor: '#fff',
-                        borderRadius: '4px'
-                      }
+                        borderRadius: '4px',
+                      },
                     }}
                     InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.7)' } }}
                   />
@@ -139,5 +141,5 @@ export default function LoginPage() {
         </Paper>
       </Box>
     </Box>
-  );
+  )
 }

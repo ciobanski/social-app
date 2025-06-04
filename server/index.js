@@ -33,6 +33,7 @@ const storiesRoutes = require('./routes/stories');
 const friendsRoutes = require('./routes/friends');
 const presenceRoutes = require('./routes/presence');
 
+
 const app = express();
 const server = http.createServer(app);
 const { Server } = require('socket.io');

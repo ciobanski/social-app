@@ -383,17 +383,20 @@ router.post('/refresh-token', async (req, res) => {
 // ── POST /api/auth/logout ─────────────────────────────────────────────────
 router.post('/logout', authMiddleware, async (req, res) => {
   try {
-    const { refreshToken } = req.body;
-    if (!refreshToken) return res.sendStatus(204);
+    // allow req.body to be undefined
+    const { refreshToken } = req.body || {};
+    if (!refreshToken) {
+      // no refreshToken provided → just 204
+      return res.sendStatus(204);
+    }
 
     const user = await User.findById(req.user._id);
     user.refreshTokens = user.refreshTokens.filter(rt => rt.token !== refreshToken);
     await user.save();
-
-    res.sendStatus(204);
+    return res.sendStatus(204);
   } catch (err) {
     console.error('Logout error:', err);
-    res.status(500).json({ message: 'Server error during logout' });
+    return res.status(500).json({ message: 'Server error during logout' });
   }
 });
 
