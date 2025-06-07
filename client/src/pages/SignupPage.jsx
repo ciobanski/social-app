@@ -1,13 +1,6 @@
 // src/pages/SignupPage.jsx
+
 import React from 'react';
-import {
-  Box,
-  Paper,
-  Typography,
-  TextField,
-  Button,
-  Link as MuiLink
-} from '@mui/material';
 import { Link, useNavigate } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
@@ -27,7 +20,7 @@ const schema = yup
     password: yup
       .string()
       .min(6, 'Password must be at least 6 characters')
-      .required('Password is required')
+      .required('Password is required'),
   })
   .required();
 
@@ -36,7 +29,7 @@ export default function SignupPage() {
   const {
     control,
     handleSubmit,
-    formState: { errors, isSubmitting }
+    formState: { errors, isSubmitting },
   } = useForm({ resolver: yupResolver(schema) });
 
   const onSubmit = async (data) => {
@@ -54,96 +47,118 @@ export default function SignupPage() {
   };
 
   return (
-    <Box
-      sx={{
-        position: 'fixed',
-        inset: 0,
-        backgroundImage: `url(${BG_URL})`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat'
-      }}
+    <div
+      className="fixed inset-0 bg-cover bg-center flex items-center justify-center"
+      style={{ backgroundImage: `url(${BG_URL})` }}
     >
-      <Box
-        sx={{
-          height: '100%',
-          width: '100%',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center'
-        }}
-      >
-        <Paper
-          elevation={8}
-          sx={{
-            width: { xs: '90%', sm: 400 },
-            maxWidth: 400,
-            bgcolor: 'background.paper',
-            backdropFilter: 'blur(8px)',
-            p: 4,
-            borderRadius: 2
-          }}
-        >
-          <Typography variant="h4" align="center" gutterBottom>
-            Sign Up
-          </Typography>
+      <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-md rounded-lg shadow-lg w-11/12 max-w-md p-6">
+        <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100 text-center mb-6">
+          Sign Up
+        </h1>
 
-          <Box
-            component="form"
-            autoComplete="off"
-            onSubmit={handleSubmit(onSubmit)}
-            sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <div>
+            <label className="block text-gray-700 dark:text-gray-300 mb-1">
+              First Name
+            </label>
+            <Controller
+              name="firstName"
+              control={control}
+              defaultValue=""
+              render={({ field }) => (
+                <input
+                  {...field}
+                  type="text"
+                  className={`w-full px-3 py-2 rounded-md bg-gray-100 dark:bg-gray-700 border ${errors.firstName ? 'border-red-500' : 'border-transparent'
+                    } focus:outline-none focus:ring-2 focus:ring-indigo-500`}
+                />
+              )}
+            />
+            {errors.firstName && (
+              <p className="text-red-500 text-sm mt-1">{errors.firstName.message}</p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-gray-700 dark:text-gray-300 mb-1">
+              Last Name
+            </label>
+            <Controller
+              name="lastName"
+              control={control}
+              defaultValue=""
+              render={({ field }) => (
+                <input
+                  {...field}
+                  type="text"
+                  className={`w-full px-3 py-2 rounded-md bg-gray-100 dark:bg-gray-700 border ${errors.lastName ? 'border-red-500' : 'border-transparent'
+                    } focus:outline-none focus:ring-2 focus:ring-indigo-500`}
+                />
+              )}
+            />
+            {errors.lastName && (
+              <p className="text-red-500 text-sm mt-1">{errors.lastName.message}</p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-gray-700 dark:text-gray-300 mb-1">Email</label>
+            <Controller
+              name="email"
+              control={control}
+              defaultValue=""
+              render={({ field }) => (
+                <input
+                  {...field}
+                  type="email"
+                  className={`w-full px-3 py-2 rounded-md bg-gray-100 dark:bg-gray-700 border ${errors.email ? 'border-red-500' : 'border-transparent'
+                    } focus:outline-none focus:ring-2 focus:ring-indigo-500`}
+                />
+              )}
+            />
+            {errors.email && (
+              <p className="text-red-500 text-sm mt-1">{errors.email.message}</p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-gray-700 dark:text-gray-300 mb-1">
+              Password
+            </label>
+            <Controller
+              name="password"
+              control={control}
+              defaultValue=""
+              render={({ field }) => (
+                <input
+                  {...field}
+                  type="password"
+                  className={`w-full px-3 py-2 rounded-md bg-gray-100 dark:bg-gray-700 border ${errors.password ? 'border-red-500' : 'border-transparent'
+                    } focus:outline-none focus:ring-2 focus:ring-indigo-500`}
+                />
+              )}
+            />
+            {errors.password && (
+              <p className="text-red-500 text-sm mt-1">{errors.password.message}</p>
+            )}
+          </div>
+
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-md transition disabled:opacity-50"
           >
-            {[
-              { name: 'firstName', label: 'First Name' },
-              { name: 'lastName', label: 'Last Name' },
-              { name: 'email', label: 'Email', type: 'email' },
-              { name: 'password', label: 'Password', type: 'password' }
-            ].map(({ name, label, type }) => (
-              <Controller
-                key={name}
-                name={name}
-                control={control}
-                defaultValue=""
-                render={({ field }) => (
-                  <TextField
-                    {...field}
-                    label={label}
-                    type={type || 'text'}
-                    variant="filled"
-                    error={!!errors[name]}
-                    helperText={errors[name]?.message}
-                    autoComplete="new-password"
-                    sx={{
-                      '& .MuiFilledInput-root': {
-                        borderRadius: '4px',
-                        bgcolor: 'rgba(255,255,255,0.1)'
-                      },
-                      '& .MuiFilledInput-input:-webkit-autofill': {
-                        WebkitBoxShadow: `0 0 0 1000px rgba(255,255,255,0.1) inset`,
-                        WebkitTextFillColor: '#fff',
-                        borderRadius: '4px'
-                      }
-                    }}
-                    InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.7)' } }}
-                  />
-                )}
-              />
-            ))}
+            {isSubmitting ? 'Signing up…' : 'Sign Up'}
+          </button>
+        </form>
 
-            <Button type="submit" variant="contained" size="large" color="secondary" disabled={isSubmitting}>
-              {isSubmitting ? 'Signing up…' : 'Sign Up'}
-            </Button>
-          </Box>
-
-          <Typography align="center" sx={{ mt: 2, color: 'text.secondary' }}>
-            Already have an account?{' '}
-            <MuiLink component={Link} to="/login">
-              Log in
-            </MuiLink>
-          </Typography>
-        </Paper>
-      </Box>
-    </Box>
+        <p className="text-center text-gray-700 dark:text-gray-300 mt-4">
+          Already have an account?{' '}
+          <Link to="/login" className="text-indigo-600 hover:text-indigo-700 font-medium">
+            Log in
+          </Link>
+        </p>
+      </div>
+    </div>
   );
 }

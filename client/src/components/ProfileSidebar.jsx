@@ -1,22 +1,5 @@
 // src/components/ProfileSidebar.jsx
-
 import React, { useContext } from 'react';
-import {
-  Box,
-  Paper,
-  Avatar,
-  Typography,
-  List,
-  ListItem,
-  ListItemIcon,
-  ListItemText,
-  Divider,
-} from '@mui/material';
-import {
-  Person as PersonIcon,
-  Settings as SettingsIcon,
-  Bookmark as BookmarkIcon,
-} from '@mui/icons-material';
 import { Link as RouterLink } from 'react-router-dom';
 import AuthContext from '../AuthContext';
 
@@ -25,63 +8,44 @@ export default function ProfileSidebar() {
 
   // Hard‐coded links for demo purposes:
   const links = [
-    { label: 'View Profile', icon: <PersonIcon />, to: `/profile/${user.id}` },
-    { label: 'Settings', icon: <SettingsIcon />, to: '/settings' },
-    { label: 'Saved Posts', icon: <BookmarkIcon />, to: '/saved' },
+    { label: 'View Profile', icon: 'person', to: `/profile/${user.id}` },
+    { label: 'Settings', icon: 'settings', to: '/settings' },
+    { label: 'Saved Posts', icon: 'bookmark', to: '/saved' },
   ];
 
   return (
-    <Paper sx={{ p: 2, width: '100%' }}>
-      <Box sx={{ textAlign: 'center', mb: 2 }}>
-        <Avatar
-          src={user.avatarUrl || ''}
-          sx={{ width: 80, height: 80, mx: 'auto', mb: 1 }}
+    <div className="bg-gray-800 rounded-lg p-4 w-full">
+      <div className="text-center mb-4">
+        <img
+          src={user.avatarUrl || '/placeholder-avatar.png'}
+          alt="avatar"
+          className="w-20 h-20 rounded-full mx-auto mb-2 object-cover"
         />
-        <Typography
-          component={RouterLink}
+        <RouterLink
           to={`/profile/${user.id}`}
-          variant="h6"
-          sx={{
-            textDecoration: 'none',
-            color: 'text.primary',
-            '&:hover': { color: 'primary.main' },
-          }}
+          className="block text-white text-xl font-bold hover:text-indigo-400"
         >
           {user.firstName} {user.lastName}
-        </Typography>
-      </Box>
+        </RouterLink>
+      </div>
 
-      <Divider sx={{ mb: 1 }} />
+      <hr className="border-gray-700 mb-4" />
 
-      <List>
+      <ul className="flex flex-col space-y-2">
         {links.map((item) => (
-          <ListItem
-            key={item.label}
-            component={RouterLink}
-            to={item.to}
-            disableGutters
-            sx={{
-              borderRadius: 1,
-              mb: 0.5,
-              '&:hover': {
-                bgcolor: 'action.hover',
-              },
-            }}
-          >
-            <ListItemIcon sx={{ color: 'text.secondary', minWidth: 36 }}>
-              {item.icon}
-            </ListItemIcon>
-            <ListItemText
-              primary={item.label}
-              primaryTypographyProps={{
-                variant: 'body1',
-                color: 'text.primary',
-                sx: { fontWeight: 500 },
-              }}
-            />
-          </ListItem>
+          <li key={item.label}>
+            <RouterLink
+              to={item.to}
+              className="flex items-center p-2 rounded hover:bg-gray-700 transition-colors"
+            >
+              <span className="material-icons text-gray-300 mr-3">
+                {item.icon}
+              </span>
+              <span className="text-white font-medium">{item.label}</span>
+            </RouterLink>
+          </li>
         ))}
-      </List>
-    </Paper>
+      </ul>
+    </div>
   );
 }

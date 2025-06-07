@@ -1,53 +1,26 @@
 // src/components/Layout.jsx
 import React from 'react';
-import { Box, Toolbar, IconButton } from '@mui/material';
-import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline';
 import { Outlet } from 'react-router-dom';
 import Header from './Header';
 
 export default function Layout() {
   return (
-    <>
-      {/* Full-width fixed header */}
+    <div className="min-h-screen flex flex-col bg-gray-900 text-white">
+      {/* Fixed Header */}
       <Header />
 
-      {/* Spacer to sit below AppBar */}
-      <Toolbar variant="dense" />
-
-      {/* Main content area */}
-      <Box
-        component="main"
-        sx={{
-          width: '100%',
-          pt: 2,
-          px: 2,
-          pb: 4,
-          overflowX: 'hidden'
-        }}
-      >
+      {/* Main content wrapper: pad for header (h-16) */}
+      <div className="pt-16 flex-1 overflow-x-hidden">
         <Outlet />
 
-        {/* Chat bubble on small screens, bottom-left */}
-        <Box
-          sx={{
-            position: 'fixed',
-            bottom: 16,
-            left: 16,
-            display: { xs: 'block', md: 'none' }
-          }}
+        {/* Chat bubble on small screens */}
+        <button
+          className="fixed bottom-4 left-4 bg-indigo-500 text-white p-3 rounded-full shadow-lg md:hidden"
+          aria-label="Chat"
         >
-          <IconButton
-            color="primary"
-            sx={{
-              bgcolor: 'background.paper',
-              '&:hover': { bgcolor: 'background.paper' },
-              boxShadow: 3
-            }}
-          >
-            <ChatBubbleOutlineIcon />
-          </IconButton>
-        </Box>
-      </Box>
-    </>
+          <span className="material-icons">chat_bubble_outline</span>
+        </button>
+      </div>
+    </div>
   );
 }

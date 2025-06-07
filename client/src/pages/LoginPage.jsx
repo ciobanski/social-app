@@ -1,5 +1,6 @@
 // src/pages/LoginPage.jsx
-import React, { useContext } from 'react'
+
+import React, { useContext } from 'react';
 import {
   Box,
   Paper,
@@ -7,17 +8,17 @@ import {
   TextField,
   Button,
   Link as MuiLink,
-} from '@mui/material'
-import { Link, useNavigate } from 'react-router-dom'
-import { useForm, Controller } from 'react-hook-form'
-import { yupResolver } from '@hookform/resolvers/yup'
-import * as yup from 'yup'
-import AuthContext from '../AuthContext'
-import { toast } from 'react-toastify'
+} from '@mui/material';
+import { Link, useNavigate } from 'react-router-dom';
+import { useForm, Controller } from 'react-hook-form';
+import { yupResolver } from '@hookform/resolvers/yup';
+import * as yup from 'yup';
+import AuthContext from '../AuthContext';
+import { toast } from 'react-toastify';
 
 const BG_URL =
   'https://images.unsplash.com/photo-1633886038302-9710437f6ca2?' +
-  'q=80&w=1932&auto=format&fit=crop'
+  'q=80&w=1932&auto=format&fit=crop';
 
 const schema = yup
   .object({
@@ -27,32 +28,33 @@ const schema = yup
       .min(6, 'Password must be at least 6 characters')
       .required('Password is required'),
   })
-  .required()
+  .required();
 
 export default function LoginPage() {
-  const { login, authLoading } = useContext(AuthContext)
-  const navigate = useNavigate()
+  const { login, authLoading } = useContext(AuthContext);
+  const navigate = useNavigate();
 
   const {
     control,
     handleSubmit,
     formState: { errors, isSubmitting },
-  } = useForm({ resolver: yupResolver(schema) })
+  } = useForm({ resolver: yupResolver(schema) });
 
   const onSubmit = async (data) => {
-    // data = { email, password }
-    const result = await login(data.email, data.password)
+    // Use AuthContext.login to store under localStorage.authToken
+    const result = await login(data.email, data.password);
     if (!result.success) {
-      // show the backend‐sent error (or generic) in a toast
-      toast.error(result.message || 'Login failed')
-      return
+      toast.error(result.message || 'Login failed');
+      return;
     }
-    toast.success('Logged in successfully!')
-    navigate('/')
-  }
+    // Clear any old “token” key just in case:
+    localStorage.removeItem('token');
 
-  // If AuthContext is still checking an existing token, show nothing (or a spinner)
-  if (authLoading) return null
+    toast.success('Logged in successfully!');
+    navigate('/');
+  };
+
+  if (authLoading) return null;
 
   return (
     <Box
@@ -141,5 +143,5 @@ export default function LoginPage() {
         </Paper>
       </Box>
     </Box>
-  )
+  );
 }

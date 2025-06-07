@@ -1,99 +1,73 @@
+// src/components/Header.jsx
 import React, { useContext } from 'react';
-import {
-  AppBar,
-  Toolbar,
-  Typography,
-  IconButton,
-  Box,
-  InputBase
-} from '@mui/material';
-import { styled, alpha } from '@mui/material/styles';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
+import AuthContext from '../AuthContext';
 import SearchIcon from '@mui/icons-material/Search';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import SettingsIcon from '@mui/icons-material/Settings';
 import LogoutIcon from '@mui/icons-material/Logout';
-import { Link as RouterLink, useNavigate } from 'react-router-dom';
-import AuthContext from '../AuthContext';
-
-const Search = styled('div')(({ theme }) => ({
-  position: 'relative',
-  borderRadius: theme.shape.borderRadius,
-  backgroundColor: alpha(theme.palette.common.white, 0.15),
-  '&:hover': { backgroundColor: alpha(theme.palette.common.white, 0.25) },
-  width: '100%',
-  maxWidth: 600,
-  [theme.breakpoints.up('sm')]: {
-    marginLeft: theme.spacing(2),
-    marginRight: theme.spacing(2)
-  }
-}));
-
-const SearchIconWrapper = styled('div')(({ theme }) => ({
-  padding: theme.spacing(0, 2),
-  height: '100%',
-  position: 'absolute',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center'
-}));
-
-const StyledInputBase = styled(InputBase)(({ theme }) => ({
-  color: 'inherit',
-  width: '100%',
-  '& .MuiInputBase-input': {
-    padding: theme.spacing(1, 1, 1, 0),
-    paddingLeft: `calc(1em + ${theme.spacing(4)})`,
-    transition: theme.transitions.create('width'),
-    width: '100%'
-  }
-}));
 
 export default function Header() {
   const navigate = useNavigate();
   const { user, logout } = useContext(AuthContext);
 
   return (
-    <AppBar position="fixed" sx={{ width: '100vw', left: 0, top: 0, zIndex: theme => theme.zIndex.drawer + 1 }}>
-      <Toolbar variant="dense">
-        {/* Left: Logo */}
-        <Typography
-          variant="h6"
-          component={RouterLink}
-          to="/"
-          sx={{ color: 'inherit', textDecoration: 'none' }}
+    <header className="fixed top-0 left-0 w-full h-16 bg-gray-800 shadow-md flex items-center px-4 z-50">
+      {/* Left: Logo */}
+      <RouterLink to="/" className="text-2xl font-bold text-indigo-400 hover:text-indigo-300">
+        Echo
+      </RouterLink>
+
+      {/* Center: Search Bar */}
+      <div className="flex-1 flex justify-center">
+        <div className="relative w-full max-w-md">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <SearchIcon className="text-gray-400" />
+          </div>
+          <input
+            type="text"
+            placeholder="Search…"
+            className="
+              w-full
+              pl-10
+              pr-4
+              py-2
+              rounded-lg
+              bg-gray-700
+              text-white
+              placeholder-gray-400
+              focus:outline-none
+              focus:ring-2
+              focus:ring-indigo-500
+            "
+          />
+        </div>
+      </div>
+
+      {/* Right: Icons */}
+      <nav className="flex items-center space-x-4">
+        <RouterLink
+          to={user ? `/profile/${user.id}` : '/login'}
+          className="p-2 rounded-full hover:bg-gray-700"
         >
-          Echo
-        </Typography>
-
-        {/* Center: Search (forced center) */}
-        <Box sx={{ flexGrow: 1, display: 'flex', justifyContent: 'center' }}>
-          <Search>
-            <SearchIconWrapper>
-              <SearchIcon />
-            </SearchIconWrapper>
-            <StyledInputBase placeholder="Search…" inputProps={{ 'aria-label': 'search' }} />
-          </Search>
-        </Box>
-
-        {/* Right: Icons */}
-        <IconButton color="inherit" component={RouterLink} to={`/profile/${user?.id}`} size="small">
-          <AccountCircleIcon />
-        </IconButton>
-        <IconButton color="inherit" component={RouterLink} to="/settings" size="small" sx={{ ml: 1 }}>
-          <SettingsIcon />
-        </IconButton>
-        <IconButton
-          color="inherit"
+          <AccountCircleIcon className="text-gray-200" />
+        </RouterLink>
+        <RouterLink
+          to="/settings"
+          className="p-2 rounded-full hover:bg-gray-700"
+        >
+          <SettingsIcon className="text-gray-200" />
+        </RouterLink>
+        <button
           onClick={() => {
             logout();
             navigate('/login');
           }}
-          size="small"
-          sx={{ ml: 1 }}
+          className="p-2 rounded-full hover:bg-gray-700"
         >
-          <LogoutIcon />
-        </IconButton>
-      </Toolbar>
-    </AppBar>
+          <LogoutIcon className="text-gray-200" />
+        </button>
+      </nav>
+    </header>
   );
 }

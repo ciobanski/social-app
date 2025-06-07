@@ -6,7 +6,7 @@ import { api } from './api';
 const AuthContext = createContext({
   user: null,
   authLoading: true,
-  login: async () => { },
+  login: async (email, password) => { },
   logout: async () => { },
 });
 
@@ -16,29 +16,30 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
 
-  // Store or clear token in localStorage + set Axios header
+  // Helper to set/clear our JWT
   const setToken = (token) => {
     if (token) {
-      sessionStorage.setItem('authToken', token);
+      localStorage.setItem('authToken', token);
       api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
     } else {
-      sessionStorage.removeItem('authToken');
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('token'); // also clear old key, if it exists
       delete api.defaults.headers.common['Authorization'];
     }
   };
 
-  // On mount: look for a saved token and validate it via /auth/me
+  // On mount: check existing authToken
   useEffect(() => {
     (async () => {
-      const stored = sessionStorage.getItem('authToken');
+      const stored = localStorage.getItem('authToken');
       if (!stored) {
         setAuthLoading(false);
         return;
       }
+
       api.defaults.headers.common['Authorization'] = `Bearer ${stored}`;
       try {
         const { data } = await api.get('/auth/me');
-        // backend returns { user: { … } }
         setUser(data.user);
       } catch (err) {
         console.error('Auth check failed:', err);
@@ -50,11 +51,10 @@ export function AuthProvider({ children }) {
     })();
   }, []);
 
-  // login(email, password) → POST /api/auth/login
+  // login(email,password) → POST /auth/login
   const login = async (email, password) => {
     try {
       const { data } = await api.post('/auth/login', { email, password });
-      // response: { token, user: { … } }
       const { token, user: me } = data;
       setToken(token);
       setUser(me);
@@ -70,7 +70,7 @@ export function AuthProvider({ children }) {
     }
   };
 
-  // logout() → POST /api/auth/logout
+  // logout() → POST /auth/logout
   const logout = async () => {
     try {
       await api.post('/auth/logout');
