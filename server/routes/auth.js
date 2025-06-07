@@ -1,4 +1,3 @@
-// routes/auth.js
 /* eslint-disable consistent-return */
 const express = require('express');
 const bcrypt = require('bcryptjs');
@@ -9,27 +8,31 @@ const crypto = require('crypto');
 const User = require('../models/User');
 const authMiddleware = require('../middleware/auth');
 const { sendMail } = require('../utils/mail');
+const { randomHex } = require('../utils/random');   // crypto helper
 
 const router = express.Router();
 
-/* ────────────────────────────────  Helpers / Constants  ─────────────────────────────── */
-const passwordRegex = /^(?=.*[A-Z])(?=.*\d).{8,}$/;   // ≥8 chars, 1 uppercase, 1 number
+/* ───────────── helpers & constants ───────────── */
+const passwordRegex = /^(?=.*[A-Z])(?=.*\d).{8,}$/;   // ≥8 chars, 1 upper, 1 digit
+const authCookieOpt = {
+  httpOnly: true,
+  sameSite: 'lax',
+  secure: process.env.NODE_ENV === 'production',
+  maxAge: 7 * 24 * 60 * 60 * 1000,                  // 7 days
+};
 
-/* ──────────────────────────────────────────────  SIGN-UP  ───────────────────────────────────────────── */
+/* ─────────────────── SIGN-UP ─────────────────── */
 router.post('/signup', async (req, res) => {
   try {
     const { firstName, lastName, email, password } = req.body;
-
     if (!firstName || !lastName || !email || !password)
-      return res.status(400).json({ message: 'First name, last name, email, and password are required' });
+      return res.status(400).json({ message: 'All fields required' });
 
     if (firstName.length > 30 || lastName.length > 30)
-      return res.status(400).json({ message: 'First and last names must each be at most 30 characters' });
+      return res.status(400).json({ message: 'Names must be ≤30 chars' });
 
     if (!passwordRegex.test(password))
-      return res.status(400).json({
-        message: 'Password must be at least 8 characters long, include an uppercase letter and a number',
-      });
+      return res.status(400).json({ message: 'Password ≥8 chars, 1 uppercase & 1 number' });
 
     if (await User.findOne({ email }))
       return res.status(409).json({ message: 'Email already in use' });
@@ -45,107 +48,89 @@ router.post('/signup', async (req, res) => {
     await sendMail({
       to: user.email,
       subject: 'Please verify your email',
-      html: `<p>Hi ${user.firstName},</p>
-             <p>Click <a href="${link}">here</a> to verify your account (expires in 24h).</p>`,
+      html: `<p>Hi ${user.firstName},</p><p>Click <a href="${link}">here</a> to verify (expires in 24 h).</p>`,
     });
 
-    return res.status(201).json({
-      id: user._id,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      email: user.email,
-      role: user.role,
-      isVerified: user.isVerified,
-    });
+    res.status(201).json({ ...dto(user), isVerified: false });
   } catch (err) {
-    console.error('Signup error:', err);
-    return res.status(500).json({ message: 'Server error during signup' });
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
-/* ─────────────────────────────────────  VERIFY EMAIL  ───────────────────────────────────── */
+/* ─────────── VERIFY EMAIL ─────────── */
 router.get('/verify-email', async (req, res) => {
   try {
     const { token } = req.query;
-    if (!token) return res.status(400).json({ message: 'Verification token is required' });
+    if (!token) return res.status(400).json({ message: 'Token required' });
 
     const user = await User.findOne({
-      verifyToken: token,
-      verifyTokenExpires: { $gt: Date.now() },
+      verifyToken: token, verifyTokenExpires: { $gt: Date.now() },
     });
-    if (!user) return res.status(400).json({ message: 'Invalid or expired token' });
+    if (!user) return res.status(400).json({ message: 'Invalid/expired token' });
 
     user.isVerified = true;
     user.verifyToken = undefined;
     user.verifyTokenExpires = undefined;
     await user.save();
-
-    return res.json({ message: 'Email successfully verified! You can now log in.' });
+    res.json({ message: 'Email verified — you can log in.' });
   } catch (err) {
-    console.error('Verify-email error:', err);
-    return res.status(500).json({ message: 'Server error during email verification' });
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
-/* ──────────────────────────────────────────────  LOGIN  ─────────────────────────────────────────────── */
+/* ─────────────────── LOGIN ─────────────────── */
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
-    if (!email || !password) return res.status(400).json({ message: 'Email and password are required' });
+    if (!email || !password)
+      return res.status(400).json({ message: 'Email & password required' });
 
     const user = await User.findOne({ email });
     if (!user) return res.status(401).json({ message: 'Invalid credentials' });
-    if (!user.isVerified) return res.status(403).json({ message: 'Please verify your email before logging in' });
-    const isMatch = await bcrypt.compare(password, user.passwordHash);
-    if (!isMatch) return res.status(401).json({ message: 'Invalid credentials' });
+    if (!user.isVerified) return res.status(403).json({ message: 'Verify e-mail first' });
+    if (!(await bcrypt.compare(password, user.passwordHash)))
+      return res.status(401).json({ message: 'Invalid credentials' });
 
-    const token = jwt.sign({ userId: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '7d' });
+    /* ―― 2-FA check ―― */
+    const trusted = user.trustedDevices.find(
+      d => d.deviceId === req.cookies.deviceToken && d.expires > Date.now()
+    );
 
-    res.cookie('authToken', token, {
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+    if (user.twoFactorEnabled && !trusted) {
+      const code = Math.floor(100000 + Math.random() * 900000).toString();
+      user.twoFactorCode = code;
+      user.twoFactorCodeExpires = Date.now() + 5 * 60 * 1000;
+      await user.save();
 
-    const LoginEvent = require('../models/LoginEvent');
-    await LoginEvent.create({ user: user._id });
+      await sendMail({
+        to: user.email,
+        subject: 'Your 2-FA code',
+        html: `<p>Your login code is <b>${code}</b>. Expires in 5 minutes.</p>`,
+      });
 
-    return res.json({
-      token, // left for backwards-compat
-      user: {
-        id: user._id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
-        role: user.role,
-      },
-    });
+      return res.json({ require2fa: true, userId: user._id });
+    }
+
+    /* ―― issue cookie ―― */
+    const token = jwt.sign({ userId: user._id, role: user.role },
+      process.env.JWT_SECRET, { expiresIn: '7d' });
+    res.cookie('authToken', token, authCookieOpt);
+    res.json({ user: dto(user) });
   } catch (err) {
-    console.error('Login error:', err);
-    return res.status(500).json({ message: 'Server error during login' });
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
-/* ────────────────────────────────────────────────  ME  ──────────────────────────────────────────────── */
+/* ─────────── /me ─────────── */
 router.get('/me', authMiddleware, (req, res) => {
-  const u = req.user;
-  return res.json({
-    user: {
-      id: u._id,
-      firstName: u.firstName,
-      lastName: u.lastName,
-      email: u.email,
-      role: u.role,
-    },
-  });
+  res.json({ user: dto(req.user) });
 });
 
-/* ════════════════════════════  GOOGLE OAUTH  ══════════════════════════════════════════════ */
-
-// Kick-off
-router.get(
-  '/google',
+/* ═══════════ GOOGLE OAUTH ═══════════ */
+router.get('/google',
   passport.authenticate('google', {
     scope: [
       'https://www.googleapis.com/auth/userinfo.profile',
@@ -155,9 +140,7 @@ router.get(
   })
 );
 
-// Callback
-router.get(
-  '/google/callback',
+router.get('/google/callback',
   passport.authenticate('google', { session: false }),
   (req, res) => {
     const token = jwt.sign(
@@ -165,62 +148,64 @@ router.get(
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
-
-    res.cookie('authToken', token, {
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
-
-    return res.redirect(`${process.env.CLIENT_ORIGIN}/?g=1`);
+    res.cookie('authToken', token, authCookieOpt);
+    res.redirect(`${process.env.CLIENT_ORIGIN}/?g=1`);
   }
 );
 
-/* ──────────────────────────────────  REQUEST PASSWORD RESET  ───────────────────────────────── */
+/* ─────────── PASSWORD RESET (request) ─────────── */
 router.post('/request-password-reset', async (req, res) => {
   try {
     const { email } = req.body;
-    if (!email) return res.status(400).json({ message: 'Email is required' });
+    if (!email) return res.status(400).json({ message: 'Email required' });
 
     const user = await User.findOne({ email });
     if (user) {
       user.resetPasswordToken = crypto.randomBytes(32).toString('hex');
-      user.resetPasswordExpires = Date.now() + 3600 * 1000; // 1 hour
+      user.resetPasswordExpires = Date.now() + 3600 * 1000;
       await user.save();
 
       const link = `${process.env.CLIENT_ORIGIN}/reset-password?token=${user.resetPasswordToken}`;
-      console.log(`🔑 Password reset link (DEV): ${link}`);
       await sendMail({
         to: user.email,
         subject: 'Reset your password',
-        html: `<p>Click <a href="${link}">here</a> to reset (1h).</p>`,
+        html: `<p>Click <a href="${link}">here</a> to reset (1 h expiry).</p>`,
       });
     }
-    return res.json({ message: 'If that email exists, a reset link has been sent.' });
+    res.json({ message: 'If that e-mail exists, a reset link was sent.' });
   } catch (err) {
-    console.error('Request-password-reset error:', err);
-    return res.status(500).json({ message: 'Server error during password reset request' });
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
-/* ───────────────────────────────────────  RESET PASSWORD  ───────────────────────────────────────── */
+/* reset-link pre-flight */
+router.get('/check-reset-token', async (req, res) => {
+  const { token } = req.query;
+  if (!token) return res.json({ ok: false });
+
+  const user = await User.findOne({
+    resetPasswordToken: token,
+    resetPasswordExpires: { $gt: Date.now() },
+  }).select('_id');
+  res.json({ ok: !!user });
+});
+
+/* perform reset */
 router.post('/reset-password', async (req, res) => {
   try {
     const { token, newPassword } = req.body;
     if (!token || !newPassword)
-      return res.status(400).json({ message: 'Token and new password are required' });
+      return res.status(400).json({ message: 'Token & newPassword required' });
 
     const user = await User.findOne({
       resetPasswordToken: token,
       resetPasswordExpires: { $gt: Date.now() },
     });
-    if (!user) return res.status(400).json({ message: 'Invalid or expired reset token' });
+    if (!user) return res.status(400).json({ message: 'Invalid/expired token' });
 
     if (!passwordRegex.test(newPassword))
-      return res.status(400).json({
-        message: 'Password must be at least 8 chars, include uppercase & number',
-      });
+      return res.status(400).json({ message: 'Password ≥8 chars, 1 upper, 1 digit' });
 
     user.passwordHash = await bcrypt.hash(newPassword, 12);
     user.resetPasswordToken = undefined;
@@ -228,101 +213,65 @@ router.post('/reset-password', async (req, res) => {
     user.refreshTokens = [];
     await user.save();
 
-    return res.json({ message: 'Password reset! Please log in.' });
+    res.json({ message: 'Password reset — log in.' });
   } catch (err) {
-    console.error('Reset-password error:', err);
-    return res.status(500).json({ message: 'Server error during password reset' });
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
-/* ───────────────────────────────────────────  2FA - Request Code  ───────────────────────────────────── */
-router.post('/request-2fa', authMiddleware, async (req, res) => {
+/* ─────────── VERIFY 2-FA ─────────── */
+router.post('/verify-2fa', async (req, res) => {
   try {
-    const user = await User.findById(req.user._id);
+    const { userId, code, rememberDevice } = req.body;
+    const user = await User.findById(userId);
+    if (!user) return res.status(400).json({ message: 'User not found' });
 
-    const deviceId = req.cookies.deviceToken;
-    if (deviceId) {
-      const trusted = user.trustedDevices.find(
-        (d) => d.deviceId === deviceId && d.expires > Date.now()
-      );
-      if (trusted) return res.json({ message: 'Device already verified—no OTP needed.' });
-    }
-
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-    user.twoFactorCode = code;
-    user.twoFactorCodeExpires = Date.now() + 5 * 60 * 1000;
-    await user.save();
-
-    await sendMail({
-      to: user.email,
-      subject: 'Your 2FA Code',
-      html: `<p>Your login code is <strong>${code}</strong>. Expires in 5 minutes.</p>`,
-    });
-
-    return res.json({ message: '2FA code sent via email' });
-  } catch (err) {
-    console.error('Request-2fa error:', err);
-    return res.status(500).json({ message: 'Server error when requesting 2FA code' });
-  }
-});
-
-/* ───────────────────────────────────────────  2FA - Verify Code  ───────────────────────────────────── */
-router.post('/verify-2fa', authMiddleware, async (req, res) => {
-  try {
-    const { code } = req.body;
-    const user = await User.findById(req.user._id);
-
-    if (!user.twoFactorEnabled)
-      return res.status(400).json({ message: '2FA not enabled' });
-    if (user.twoFactorCode !== code || user.twoFactorCodeExpires < Date.now())
-      return res.status(400).json({ message: 'Invalid or expired code' });
+    if (!user.twoFactorCodeExpires || user.twoFactorCodeExpires < Date.now())
+      return res.status(400).json({ message: 'Code expired' });
+    if (user.twoFactorCode !== code)
+      return res.status(400).json({ message: 'Invalid code' });
 
     user.twoFactorCode = undefined;
     user.twoFactorCodeExpires = undefined;
 
-    const newDeviceId = crypto.randomBytes(16).toString('hex');
-    user.trustedDevices.push({
-      deviceId: newDeviceId,
-      expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-    });
-
-    const accessToken = jwt.sign(
-      { userId: user._id, role: user.role },
-      process.env.JWT_SECRET,
-      { expiresIn: '15m' }
-    );
-    const refreshToken = crypto.randomBytes(32).toString('hex');
-    user.refreshTokens.push({
-      token: refreshToken,
-      expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-    });
+    if (rememberDevice) {
+      const newDeviceId = randomHex(16);
+      user.trustedDevices.push({
+        deviceId: newDeviceId,
+        expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      });
+      res.cookie('deviceToken', newDeviceId, {
+        httpOnly: true, sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 30 * 24 * 60 * 60 * 1000,
+      });
+    }
 
     await user.save();
 
-    res.cookie('deviceToken', newDeviceId, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: 30 * 24 * 60 * 60 * 1000,
-    });
-
-    return res.json({
-      token: accessToken,
-      refreshToken,
-      user: {
-        id: user._id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
-        role: user.role,
-      },
-    });
+    const token = jwt.sign(
+      { userId: user._id, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+    res.cookie('authToken', token, authCookieOpt);
+    res.json({ ok: true, user: dto(user) });
   } catch (err) {
-    console.error('Verify-2fa error:', err);
-    return res.status(500).json({ message: 'Server error during 2FA verification' });
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
-/* ───────────────────────────────────────  REFRESH TOKEN  ───────────────────────────────────────────── */
+/* enable / disable 2-FA */
+router.post('/enable-2fa', authMiddleware, async (req, res) => {
+  const user = await User.findById(req.user._id);
+  user.twoFactorEnabled = Boolean(req.body.enabled);
+  await user.save();
+  res.json({ twoFactorEnabled: user.twoFactorEnabled });
+});
+
+/* ─────────── REFRESH TOKEN (unchanged) ─────────── */
 router.post('/refresh-token', async (req, res) => {
   try {
     const { refreshToken } = req.body;
@@ -331,8 +280,8 @@ router.post('/refresh-token', async (req, res) => {
     const user = await User.findOne({ 'refreshTokens.token': refreshToken });
     if (!user) return res.status(401).json({ message: 'Invalid refresh token' });
 
-    user.refreshTokens = user.refreshTokens.filter((rt) => rt.expires > Date.now());
-    const stored = user.refreshTokens.find((rt) => rt.token === refreshToken);
+    user.refreshTokens = user.refreshTokens.filter(rt => rt.expires > Date.now());
+    const stored = user.refreshTokens.find(rt => rt.token === refreshToken);
     if (!stored) {
       await user.save();
       return res.status(401).json({ message: 'Refresh token expired' });
@@ -348,32 +297,46 @@ router.post('/refresh-token', async (req, res) => {
     stored.expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     await user.save();
 
-    return res.json({ token: newAccessToken, refreshToken: newRefreshToken });
+    res.json({ token: newAccessToken, refreshToken: newRefreshToken });
   } catch (err) {
-    console.error('Refresh-token error:', err);
-    return res.status(500).json({ message: 'Server error during token refresh' });
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
-/* ───────────────────────────────────────────  LOGOUT  ──────────────────────────────────────────────── */
+/* ─────────── LOGOUT ─────────── */
 router.post('/logout', authMiddleware, async (req, res) => {
   try {
     const { refreshToken } = req.body || {};
-    if (!refreshToken) return res.sendStatus(204);
 
-    const user = await User.findById(req.user._id);
-    user.refreshTokens = user.refreshTokens.filter((rt) => rt.token !== refreshToken);
-    await user.save();
-    res.clearCookie('authToken', {
-      httpOnly: true,
-      sameSite: 'lax',
+    const clearOpt = {
+      httpOnly: true, sameSite: 'lax',
       secure: process.env.NODE_ENV === 'production',
-    });
+      path: '/',
+    };
+    res.clearCookie('authToken', clearOpt);
+
+    if (refreshToken) {
+      const user = await User.findById(req.user._id);
+      user.refreshTokens = user.refreshTokens.filter(rt => rt.token !== refreshToken);
+      await user.save();
+    }
     res.sendStatus(204);
   } catch (err) {
-    console.error('Logout error:', err);
-    return res.status(500).json({ message: 'Server error during logout' });
+    console.error(err);
+    res.status(500).json({ message: 'Server error during logout' });
   }
 });
 
 module.exports = router;
+
+/* helper: map user to DTO */
+function dto(u) {
+  return {
+    id: u._id,
+    firstName: u.firstName,
+    lastName: u.lastName,
+    email: u.email,
+    role: u.role,
+  };
+}

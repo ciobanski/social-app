@@ -1,6 +1,12 @@
 // src/pages/FeedPage.jsx
 
-import React, { useEffect, useState, useContext, useCallback, useRef } from 'react';
+import React, {
+  useEffect,
+  useState,
+  useContext,
+  useCallback,
+  useRef
+} from 'react';
 import { useDropzone } from 'react-dropzone';
 import { useForm, Controller } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
@@ -14,7 +20,7 @@ import {
   FiChevronRight,
   FiX,
   FiCamera,
-  FiChevronUp,
+  FiChevronUp
 } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import { api } from '../api';
@@ -22,10 +28,9 @@ import AuthContext from '../AuthContext';
 
 dayjs.extend(customParseFormat);
 
-// Validation schema: allow empty string because image‐only posts are permitted
 const postSchema = yup
   .object({
-    content: yup.string().nullable(),
+    content: yup.string().nullable()
   })
   .required();
 
@@ -33,41 +38,29 @@ export default function FeedPage() {
   const { user, authLoading } = useContext(AuthContext);
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [commentsState, setCommentsState] = useState({}); // { [postId]: { open, comments[], input } }
+  const [commentsState, setCommentsState] = useState({});
   const [showScroll, setShowScroll] = useState(false);
 
-  // New‐post preview state
-  const [imageFiles, setImageFiles] = useState([]); // File[]
-  const [imagePreviews, setImagePreviews] = useState([]); // object URLs
+  const [imageFiles, setImageFiles] = useState([]);
+  const [imagePreviews, setImagePreviews] = useState([]);
 
-  // Lightbox state
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxSrc, setLightboxSrc] = useState('');
 
-  // "See more" expansion
-  const [expandedPosts, setExpandedPosts] = useState({}); // { [postId]: bool }
-
-  // Carousel indices per post
-  const [carouselIndices, setCarouselIndices] = useState({}); // { [postId]: index }
-
-  // Hidden file input ref (for Photo button)
+  const [expandedPosts, setExpandedPosts] = useState({});
+  const [carouselIndices, setCarouselIndices] = useState({});
   const fileInputRef = useRef();
 
-  //
-  // ── Dropzone (drag‐and‐drop only; no click) ─────────────────────────────────
-  //
   const onDrop = useCallback(
-    (acceptedFiles) => {
-      const total = imageFiles.length + acceptedFiles.length;
+    (accepted) => {
+      const total = imageFiles.length + accepted.length;
       if (total > 15) {
-        toast.error('Maximum of 15 photos allowed.');
-        return;
+        return toast.error('Max 15 images');
       }
-      const imgs = acceptedFiles.filter((f) => f.type.startsWith('image/'));
-      if (!imgs.length) return;
+      const imgs = accepted.filter((f) => f.type.startsWith('image/'));
       const newPreviews = imgs.map((f) => URL.createObjectURL(f));
-      setImageFiles((prev) => [...prev, ...imgs]);
-      setImagePreviews((prev) => [...prev, ...newPreviews]);
+      setImageFiles((p) => [...p, ...imgs]);
+      setImagePreviews((p) => [...p, ...newPreviews]);
     },
     [imageFiles]
   );
@@ -75,131 +68,101 @@ export default function FeedPage() {
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: { 'image/*': [] },
-    multiple: true,
-    noClick: true, // disable click‐to‐open
-    noKeyboard: true, // disable space/enter opening
+    noClick: true,
+    noKeyboard: true
   });
 
   const {
     control,
     handleSubmit,
     reset,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting }
   } = useForm({
     resolver: yupResolver(postSchema),
-    defaultValues: { content: '' },
+    defaultValues: { content: '' }
   });
 
-  //
-  // ── Load feed (only when user is known) ──────────────────────────────────
-  //
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
-      setPosts([]);
       setLoading(false);
       return;
     }
-
     (async () => {
       setLoading(true);
       try {
         const { data } = await api.get('/posts');
         setPosts(data);
       } catch {
-        toast.error('Failed to load posts');
-        setPosts([]);
+        toast.error('Unable to load feed');
       } finally {
         setLoading(false);
       }
     })();
   }, [user, authLoading]);
 
-  //
-  // ── Scroll‐to‐top control ──────────────────────────────────────────────────
-  //
   useEffect(() => {
     const onScroll = () => setShowScroll(window.pageYOffset > 300);
     window.addEventListener('scroll', onScroll);
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  //
-  // ── Handle Photo‐button file selection ────────────────────────────────────
-  //
-  const handlePhotoClick = () => {
-    fileInputRef.current.click();
-  };
-  const onFileSelected = (e) => {
-    const files = Array.from(e.target.files || []);
-    onDrop(files);
-  };
+  const handlePhotoClick = () => fileInputRef.current.click();
+  const onFileSelected = (e) => onDrop(Array.from(e.target.files || []));
 
-  //
-  // ── Create new post (text + images) ───────────────────────────────────────
-  //
   const onPost = async ({ content }) => {
-    const trimmed = content?.trim() || '';
-    if (!trimmed && imageFiles.length === 0) {
-      return toast.error('Please add text or at least one image.');
+    const text = content.trim();
+    if (!text && imageFiles.length === 0) {
+      return toast.error('Add text or images');
     }
     try {
       let res;
-      if (imageFiles.length > 0) {
+      if (imageFiles.length) {
         const form = new FormData();
-        form.append('content', trimmed);
-        imageFiles.forEach((file) => form.append('images', file));
+        form.append('content', text);
+        imageFiles.forEach((f) => form.append('images', f));
         res = await api.post('/posts', form, {
-          headers: { 'Content-Type': 'multipart/form-data' },
+          headers: { 'Content-Type': 'multipart/form-data' }
         });
       } else {
-        res = await api.post('/posts', { content: trimmed });
+        res = await api.post('/posts', { content: text });
       }
-      setPosts((prev) => [res.data, ...prev]);
+      setPosts((p) => [res.data, ...p]);
       reset();
-      imagePreviews.forEach((url) => URL.revokeObjectURL(url));
+      imagePreviews.forEach(URL.revokeObjectURL);
       setImageFiles([]);
       setImagePreviews([]);
       toast.success('Posted!');
     } catch {
-      toast.error('Could not create post');
+      toast.error('Post failed');
     }
   };
 
-  //
-  // ── Like/unlike a post ───────────────────────────────────────────────────
-  //
   const handleLike = async (postId) => {
     const p = posts.find((x) => x._id === postId);
     if (!p) return;
     try {
       if (p.liked) {
         await api.delete(`/posts/${postId}/like`);
-        setPosts((ps) =>
-          ps.map((x) =>
-            x._id === postId
-              ? { ...x, liked: false, likeCount: x.likeCount - 1 }
-              : x
-          )
-        );
       } else {
         await api.post(`/posts/${postId}/like`);
-        setPosts((ps) =>
-          ps.map((x) =>
-            x._id === postId
-              ? { ...x, liked: true, likeCount: x.likeCount + 1 }
-              : x
-          )
-        );
       }
+      setPosts((ps) =>
+        ps.map((x) =>
+          x._id === postId
+            ? {
+              ...x,
+              liked: !x.liked,
+              likeCount: x.liked ? x.likeCount - 1 : x.likeCount + 1
+            }
+            : x
+        )
+      );
     } catch {
-      toast.error('Could not update like');
+      toast.error('Like failed');
     }
   };
 
-  //
-  // ── Toggle & load comments for a post ────────────────────────────────────
-  //
   const toggleComments = (postId) => {
     setCommentsState((s) => {
       const cs = s[postId] || { open: false, comments: [], input: '' };
@@ -207,787 +170,645 @@ export default function FeedPage() {
       if (open && !cs.comments.length) {
         api
           .get(`/comments/post/${postId}`)
-          .then((res) =>
+          .then((r) =>
             setCommentsState((prev) => ({
               ...prev,
-              [postId]: { ...cs, open, comments: res.data },
+              [postId]: { ...cs, open, comments: r.data }
             }))
           )
-          .catch(() => toast.error('Failed to load comments'));
+          .catch(() => toast.error('Comments failed'));
       }
       return { ...s, [postId]: { ...cs, open } };
     });
   };
 
-  const handleCommentChange = (postId, value) =>
+  const handleCommentChange = (pid, v) =>
     setCommentsState((s) => ({
       ...s,
-      [postId]: { ...(s[postId] || {}), input: value },
+      [pid]: { ...(s[pid] || {}), input: v }
     }));
 
-  //
-  // ── Submit a new comment (parent or reply) ───────────────────────────────
-  //
-  const handleCommentSubmit = async (e, postId) => {
+  const handleCommentSubmit = async (e, pid) => {
     e.preventDefault();
-    const cs = commentsState[postId];
+    const cs = commentsState[pid];
     if (!cs.input.trim()) return;
     try {
-      const { data: newC } = await api.post('/comments', {
-        postId,
+      const { data: c } = await api.post('/comments', {
+        postId: pid,
         content: cs.input.trim(),
-        parentComment: cs.parentComment || null,
+        parentComment: cs.parentComment || null
       });
-
-      // Insert new comment/reply immediately after its parent (or at end if parentComment is null)
       setCommentsState((prev) => {
-        const cs2 = prev[postId];
-        if (!cs2) return prev;
-
-        // Find index of parent (or, if top-level, index = -1 → push to end)
-        const idx = cs2.comments.findIndex(
-          (c) => c._id === (cs2.parentComment || '')
+        const cur = prev[pid];
+        const idx = cur.comments.findIndex(
+          (x) => x._id === (cur.parentComment || '')
         );
-        const updatedList =
+        const updated =
           idx >= 0
             ? [
-              ...cs2.comments.slice(0, idx + 1),
-              newC,
-              ...cs2.comments.slice(idx + 1),
+              ...cur.comments.slice(0, idx + 1),
+              c,
+              ...cur.comments.slice(idx + 1)
             ]
-            : [...cs2.comments, newC];
-
+            : [...cur.comments, c];
         return {
           ...prev,
-          [postId]: { ...cs2, comments: updatedList, input: '' },
+          [pid]: { ...cur, comments: updated, input: '' }
         };
       });
-
       setPosts((ps) =>
         ps.map((x) =>
-          x._id === postId
-            ? { ...x, commentCount: x.commentCount + 1 }
-            : x
+          x._id === pid ? { ...x, commentCount: x.commentCount + 1 } : x
         )
       );
       toast.success('Comment added');
     } catch {
-      toast.error('Could not add comment');
+      toast.error('Comment failed');
     }
   };
 
-  //
-  // ── Like/unlike a comment ───────────────────────────────────────────────
-  //
-  const handleCommentLike = async (postId, commentId) => {
-    const cs = commentsState[postId];
+  const handleCommentLike = async (pid, cid) => {
+    const cs = commentsState[pid];
     if (!cs) return;
-
-    // Toggle locally first
-    const updatedComments = cs.comments.map((c) => {
-      if (c._id === commentId) {
-        return {
-          ...c,
-          liked: !c.liked,
-          likeCount: c.liked ? c.likeCount - 1 : c.likeCount + 1,
-        };
-      }
-      return c;
-    });
-
+    const cobj = cs.comments.find((c) => c._id === cid);
+    const liked = cobj.liked;
     setCommentsState((prev) => ({
       ...prev,
-      [postId]: { ...cs, comments: updatedComments },
+      [pid]: {
+        ...cs,
+        comments: cs.comments.map((c) =>
+          c._id === cid
+            ? {
+              ...c,
+              liked: !c.liked,
+              likeCount: liked ? c.likeCount - 1 : c.likeCount + 1
+            }
+            : c
+        )
+      }
     }));
-
-    // Then sync with server
     try {
-      const cObj = cs.comments.find((c) => c._id === commentId);
-      if (cObj && cObj.liked) {
-        await api.delete(`/comments/${commentId}/like`);
+      if (liked) {
+        await api.delete(`/comments/${cid}/like`);
       } else {
-        await api.post(`/comments/${commentId}/like`);
+        await api.post(`/comments/${cid}/like`);
       }
     } catch {
-      toast.error('Could not update comment like');
-
-      // Revert on failure
-      const reverted = updatedComments.map((c) =>
-        c._id === commentId
-          ? {
-            ...c,
-            liked: !c.liked,
-            likeCount: c.liked ? c.likeCount + 1 : c.likeCount - 1,
-          }
-          : c
-      );
+      toast.error('Comment like failed');
+      // revert
       setCommentsState((prev) => ({
         ...prev,
-        [postId]: { ...cs, comments: reverted },
+        [pid]: {
+          ...cs,
+          comments: cs.comments.map((c) =>
+            c._id === cid
+              ? {
+                ...c,
+                liked,
+                likeCount: liked ? c.likeCount + 1 : c.likeCount - 1
+              }
+              : c
+          )
+        }
       }));
     }
   };
 
-  //
-  // ── Show/hide a reply input under a specific comment ──────────────────────
-  //
-  const handleShowReply = (postId, commentId) => {
+  const handleShowReply = (pid, cid) =>
     setCommentsState((s) => {
-      const cs = s[postId];
-      if (!cs) return s;
-
+      const cs = s[pid];
       return {
         ...s,
-        [postId]: {
+        [pid]: {
           ...cs,
           comments: cs.comments.map((c) =>
-            c._id === commentId ? { ...c, showReply: !c.showReply } : c
-          ),
-        },
+            c._id === cid ? { ...c, showReply: !c.showReply } : c
+          )
+        }
       };
     });
-  };
 
-  //
-  // ── Submit a reply to a specific comment (parentCommentId) ───────────────
-  //
-  const handleReplySubmit = async (e, postId, parentCommentId) => {
+  const handleReplySubmit = async (e, pid, pc) => {
     e.preventDefault();
-    const cs = commentsState[postId];
-    if (!cs) return;
-
-    const replyText = e.target.elements[`reply-${parentCommentId}`].value;
-    if (!replyText.trim()) return;
-
+    const cs = commentsState[pid];
+    const val = e.target.elements[`reply-${pc}`].value.trim();
+    if (!val) return;
     try {
-      const { data: newReply } = await api.post('/comments', {
-        postId,
-        content: replyText.trim(),
-        parentComment: parentCommentId,
+      const { data: r } = await api.post('/comments', {
+        postId: pid,
+        content: val,
+        parentComment: pc
       });
-
-      // Insert new reply immediately after its parent
       setCommentsState((prev) => {
-        const cs2 = prev[postId];
-        if (!cs2) return prev;
-
-        const idx = cs2.comments.findIndex((c) => c._id === parentCommentId);
-        if (idx < 0) return prev;
-
-        const updatedList = [
-          ...cs2.comments.slice(0, idx + 1),
-          newReply,
-          ...cs2.comments.slice(idx + 1),
+        const cur = prev[pid];
+        const idx = cur.comments.findIndex((c) => c._id === pc);
+        const updated = [
+          ...cur.comments.slice(0, idx + 1),
+          r,
+          ...cur.comments.slice(idx + 1)
         ];
-        return {
-          ...prev,
-          [postId]: { ...cs2, comments: updatedList },
-        };
+        return { ...prev, [pid]: { ...cur, comments: updated } };
       });
-
       setPosts((ps) =>
         ps.map((x) =>
-          x._id === postId
-            ? { ...x, commentCount: x.commentCount + 1 }
-            : x
+          x._id === pid ? { ...x, commentCount: x.commentCount + 1 } : x
         )
       );
       toast.success('Reply added');
-      // Clear the input
       e.target.reset();
     } catch {
-      toast.error('Could not add reply');
+      toast.error('Reply failed');
     }
   };
 
-  //
-  // ── Truncate post text with "See more" toggle ─────────────────────────────
-  //
-  const TRUNCATE_LENGTH = 200;
-  const isTruncated = (text) => text.length > TRUNCATE_LENGTH;
+  const TRUNCATE = 200;
+  const isTruncated = (s) => s.length > TRUNCATE;
   const displayText = (post) => {
-    const full = post.content || '';
-    if (expandedPosts[post._id] || !isTruncated(full)) return full;
-    return full.slice(0, TRUNCATE_LENGTH) + '…';
+    const ct = post.content || '';
+    if (expandedPosts[post._id] || !isTruncated(ct)) return ct;
+    return ct.slice(0, TRUNCATE) + '…';
   };
-  const toggleExpand = (postId) => {
-    setExpandedPosts((prev) => ({
-      ...prev,
-      [postId]: !prev[postId],
-    }));
+  const toggleExpand = (pid) => {
+    setExpandedPosts((p) => ({ ...p, [pid]: !p[pid] }));
   };
 
-  //
-  // ── Format a raw timestamp ────────────────────────────────────────────────
-  //
   const formatDate = (raw) => {
     let d = dayjs(raw, 'DD-MM-YYYY HH:mm:ss', true);
     if (!d.isValid()) d = dayjs(raw);
-    return d.isValid() ? d.format('MMM D, YYYY h:mm A') : 'Invalid date';
+    return d.isValid()
+      ? d.format('MMM D, YYYY h:mm A')
+      : 'Invalid date';
   };
 
-  //
-  // ── Revoke preview URLs on unmount ────────────────────────────────────────
-  //
-  useEffect(() => {
-    return () => {
-      imagePreviews.forEach((url) => URL.revokeObjectURL(url));
-    };
-  }, [imagePreviews]);
+  useEffect(
+    () => () => imagePreviews.forEach(URL.revokeObjectURL),
+    [imagePreviews]
+  );
 
-  //
-  // ── Early return if still checking auth or not logged in ──────────────────
-  //
   if (authLoading) return null;
   if (!user) {
     return (
-      <div className="flex justify-center items-center h-full py-8">
-        <p className="text-lg text-gray-300">Please log in to see the feed.</p>
+      <div className="flex justify-center items-center py-8">
+        <p className="text-base-content/60">
+          Please log in to see the feed.
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="mt-14 flex flex-col lg:flex-row max-w-screen-xl mx-auto px-2 lg:px-4 gap-6">
-      {/* ── Left Sidebar (Profile) ─────────────────────────────────────────── */}
-      <div className="hidden lg:block lg:w-2/12">
-        <div className="bg-gray-800 rounded-lg p-4 text-center mb-6">
-          <img
-            src={user.avatarUrl || '/default-avatar.png'}
-            alt="Your avatar"
-            className="w-24 h-24 rounded-full mx-auto mb-2 object-cover"
-          />
-          <a
-            href={`/profile/${user.id}`}
-            className="text-white text-lg font-semibold hover:text-gray-300"
-          >
-            {user.firstName} {user.lastName}
-          </a>
+    <div className="mt-16 lg:mt-20 flex flex-col lg:flex-row max-w-screen-xl mx-auto px-4 lg:px-6 gap-6">
+      {/* Profile Sidebar */}
+      <aside className="hidden lg:block lg:w-2/12">
+        <div className="card bg-base-100 shadow">
+          <div className="card-body text-center space-y-4">
+            <div className="avatar mx-auto">
+              <div className="w-24 h-24 rounded-full">
+                <img
+                  src={user.avatarUrl || '/default-avatar.png'}
+                  alt="avatar"
+                />
+              </div>
+            </div>
+            <a
+              href={`/profile/${user.id}`}
+              className="font-semibold text-primary"
+            >
+              {user.firstName} {user.lastName}
+            </a>
+          </div>
         </div>
-      </div>
+      </aside>
 
-      {/* ── Main Feed ───────────────────────────────────────────────────────── */}
-      <div className="w-full lg:w-8/12">
-        {/* New Post Box */}
+      {/* Main Feed */}
+      <section className="w-full lg:w-8/12 space-y-6">
+        {/* New Post */}
         <div
           {...getRootProps()}
-          className={`bg-gray-800 rounded-lg pt-6 px-4 pb-4 mb-6 ${isDragActive ? 'border-2 border-blue-500' : ''
+          className={`card bg-base-100 shadow ${isDragActive ? 'ring ring-primary' : ''
             }`}
         >
-          <input {...getInputProps()} />
-          <form onSubmit={handleSubmit(onPost)}>
-            {/* Textarea */}
-            <Controller
-              name="content"
-              control={control}
-              render={({ field }) => (
-                <textarea
-                  {...field}
-                  placeholder="What's on your mind?"
-                  className="w-full bg-gray-900 text-white placeholder-gray-400 p-3 rounded focus:outline-none focus:ring-2 focus:ring-blue-800 resize-y min-h-[80px]"
-                />
-              )}
-            />
-            {errors.content && (
-              <p className="text-red-500 text-sm mt-1">{errors.content.message}</p>
-            )}
-
-            {/* Photo & Submit Buttons */}
-            <div className="flex items-center justify-between mt-4 mb-2">
-              {/* Photo Button (icon only) */}
-              <button
-                type="button"
-                onClick={handlePhotoClick}
-                className="icon-button p-2 rounded-full hover:bg-gray-700 focus:outline-none"
-              >
-                <FiCamera size={20} className="text-blue-600" />
-              </button>
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="bg-blue-800 hover:bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50"
-              >
-                {isSubmitting ? 'Posting…' : 'Post'}
-              </button>
-            </div>
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              multiple
-              ref={fileInputRef}
-              onChange={onFileSelected}
-            />
-
-            {/* Image Previews */}
-            {imagePreviews.length > 0 && (
-              <div className="flex flex-wrap gap-2 mt-3">
-                {imagePreviews.slice(0, 4).map((src, idx) => (
-                  <div
-                    key={idx}
-                    className="relative w-20 h-20 bg-gray-700 rounded overflow-hidden"
-                  >
-                    <img
-                      src={src}
-                      alt={`preview-${idx}`}
-                      className="w-full h-full object-cover"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setImageFiles((files) => files.filter((_, i) => i !== idx));
-                        setImagePreviews((prev) => prev.filter((_, i) => i !== idx));
-                      }}
-                      className="icon-button absolute top-1 right-1 p-2 rounded-full hover:bg-gray-600 focus:outline-none"
-                    >
-                      <FiX size={14} className="text-gray-200" />
-                    </button>
-                  </div>
-                ))}
-                {imagePreviews.length > 4 && (
-                  <div className="relative w-20 h-20 bg-gray-700 rounded flex items-center justify-center text-white font-bold">
-                    +{imagePreviews.length - 4}
-                  </div>
+          <div className="card-body space-y-4">
+            <form onSubmit={handleSubmit(onPost)} className="space-y-4">
+              <Controller
+                name="content"
+                control={control}
+                render={({ field }) => (
+                  <textarea
+                    {...field}
+                    placeholder="What's on your mind?"
+                    className="textarea textarea-bordered w-full"
+                  />
                 )}
+              />
+              {errors.content && (
+                <p className="text-error text-sm">
+                  {errors.content.message}
+                </p>
+              )}
+
+              <div className="flex items-center justify-between">
+                <input {...getInputProps()} />
+                <div className="flex items-center space-x-2">
+                  <button
+                    type="button"
+                    onClick={handlePhotoClick}
+                    className="btn btn-square btn-ghost"
+                  >
+                    <FiCamera />
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="btn btn-primary"
+                  >
+                    {isSubmitting ? 'Posting…' : 'Post'}
+                  </button>
+                </div>
               </div>
-            )}
-          </form>
+
+              {imagePreviews.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {imagePreviews.slice(0, 4).map((src, i) => (
+                    <div key={i} className="relative w-20 h-20 rounded-lg overflow-hidden">
+                      <img
+                        src={src}
+                        className="object-cover w-full h-full"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setImageFiles((f) => f.filter((_, idx) => idx !== i));
+                          setImagePreviews((p) => p.filter((_, idx) => idx !== i));
+                        }}
+                        className="btn btn-xs btn-circle absolute top-1 right-1"
+                      >
+                        <FiX />
+                      </button>
+                    </div>
+                  ))}
+                  {imagePreviews.length > 4 && (
+                    <div className="w-20 h-20 bg-base-200 rounded-lg flex items-center justify-center text-lg font-bold">
+                      +{imagePreviews.length - 4}
+                    </div>
+                  )}
+                </div>
+              )}
+            </form>
+          </div>
         </div>
 
-        {/* Feed Posts */}
+        {/* Posts */}
         {loading ? (
-          [0, 1, 2].map((i) => (
-            <div
-              key={i}
-              className="bg-gray-800 rounded-lg mb-4 animate-pulse h-48"
-            ></div>
-          ))
+          Array(3)
+            .fill(0)
+            .map((_, idx) => (
+              <div
+                key={idx}
+                className="h-48 bg-base-200 animate-pulse rounded-lg"
+              />
+            ))
         ) : (
           posts.map((post) => {
             const cs = commentsState[post._id] || {
               open: false,
               comments: [],
-              input: '',
-              parentComment: null,
+              input: ''
             };
-            const images = post.imageUrls || [];
+            const imgs = post.imageUrls || [];
             const idx = carouselIndices[post._id] || 0;
-
-            const goPrev = () => {
-              setCarouselIndices((prev) => ({
-                ...prev,
-                [post._id]: Math.max(idx - 1, 0),
-              }));
-            };
-            const goNext = () => {
-              setCarouselIndices((prev) => ({
-                ...prev,
-                [post._id]: Math.min(idx + 1, images.length - 1),
-              }));
-            };
-
-            // allComments is the flat array of comments and replies
-            const allComments = cs.comments || [];
-            // only top‐level (parentComment === null)
-            const topComments = allComments.filter((c) => !c.parentComment);
-
             return (
-              <div
-                key={post._id}
-                className="bg-gray-800 rounded-lg mb-6 overflow-hidden shadow"
-              >
-                {/* Post Header */}
-                <div className="flex items-center px-4 py-3">
-                  <a href={`/profile/${post.author._id}`}>
-                    <img
-                      src={post.author.avatarUrl || '/default-avatar.png'}
-                      alt="author-avatar"
-                      className="w-10 h-10 rounded-full object-cover"
-                    />
-                  </a>
-                  <div className="ml-3 flex-1">
-                    <a
-                      href={`/profile/${post.author._id}`}
-                      className="text-gray-100 font-semibold hover:text-gray-300"
-                    >
-                      {post.author.firstName} {post.author.lastName}
+              <div key={post._id} className="card bg-base-100 shadow">
+                <div className="card-body space-y-4">
+                  {/* Header */}
+                  <div className="flex items-center space-x-3">
+                    <a href={`/profile/${post.author._id}`}>
+                      <div className="avatar">
+                        <div className="w-10 h-10 rounded-full">
+                          <img src={post.author.avatarUrl} alt="" />
+                        </div>
+                      </div>
                     </a>
-                    <p className="text-gray-500 text-sm">
-                      {formatDate(post.createdAt)}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Images Carousel */}
-                {images.length > 0 && (
-                  <div className="relative bg-black flex items-center justify-center">
-                    <img
-                      src={images[idx]}
-                      alt={`img-${idx}`}
-                      className="w-full max-h-96 object-contain cursor-pointer"
-                      onClick={() => {
-                        setLightboxSrc(images[idx]);
-                        setLightboxOpen(true);
-                      }}
-                    />
-                    {idx > 0 && (
-                      <button
-                        onClick={goPrev}
-                        className="icon-button absolute left-2 p-2 rounded-full hover:bg-gray-700 focus:outline-none"
+                    <div>
+                      <a
+                        href={`/profile/${post.author._id}`}
+                        className="font-semibold"
                       >
-                        <FiChevronLeft size={24} className="text-white" />
-                      </button>
-                    )}
-                    {idx < images.length - 1 && (
-                      <button
-                        onClick={goNext}
-                        className="icon-button absolute right-2 p-2 rounded-full hover:bg-gray-700 focus:outline-none"
-                      >
-                        <FiChevronRight size={24} className="text-white" />
-                      </button>
-                    )}
-                    <div className="absolute bottom-2 right-2 bg-gray-800 bg-opacity-70 text-white text-xs px-1 py-0.5 rounded">
-                      {idx + 1}/{images.length}
+                        {post.author.firstName} {post.author.lastName}
+                      </a>
+                      <p className="text-xs text-base-content/60">
+                        {formatDate(post.createdAt)}
+                      </p>
                     </div>
                   </div>
-                )}
 
-                {/* Post Content */}
-                <div className="px-4 py-3 text-left">
-                  <p className="text-gray-100">
+                  {/* Carousel */}
+                  {imgs.length > 0 && (
+                    <div className="relative">
+                      <img
+                        src={imgs[idx]}
+                        className="rounded-lg max-h-96 w-full object-contain cursor-pointer"
+                        onClick={() => {
+                          setLightboxSrc(imgs[idx]);
+                          setLightboxOpen(true);
+                        }}
+                      />
+                      {idx > 0 && (
+                        <button
+                          onClick={() =>
+                            setCarouselIndices((p) => ({
+                              ...p,
+                              [post._id]: idx - 1
+                            }))
+                          }
+                          className="btn btn-circle btn-ghost absolute left-2 top-1/2 transform -translate-y-1/2"
+                        >
+                          <FiChevronLeft />
+                        </button>
+                      )}
+                      {idx < imgs.length - 1 && (
+                        <button
+                          onClick={() =>
+                            setCarouselIndices((p) => ({
+                              ...p,
+                              [post._id]: idx + 1
+                            }))
+                          }
+                          className="btn btn-circle btn-ghost absolute right-2 top-1/2 transform -translate-y-1/2"
+                        >
+                          <FiChevronRight />
+                        </button>
+                      )}
+                      <div className="badge absolute bottom-2 right-2">
+                        {idx + 1}/{imgs.length}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Content */}
+                  <p>
                     {displayText(post)}
                     {isTruncated(post.content || '') && (
                       <button
                         onClick={() => toggleExpand(post._id)}
-                        className="ml-2 text-blue-900 hover:text-blue-700 text-sm focus:outline-none"
+                        className="btn btn-link btn-sm"
                       >
                         {expandedPosts[post._id] ? 'See less' : 'See more'}
                       </button>
                     )}
                   </p>
-                </div>
 
-                {/* Likes / Comments Actions */}
-                <div className="flex items-center px-4 pb-3 space-x-6">
-                  <button
-                    onClick={() => handleLike(post._id)}
-                    className="icon-button flex items-center space-x-1 hover:text-red-500 focus:outline-none p-2 rounded-full"
-                  >
-                    {post.liked ? (
-                      <FiHeart size={20} className="text-red-500" />
-                    ) : (
-                      <FiHeart size={20} className="text-gray-300 hover:text-red-500" />
-                    )}
-                    <span className="text-sm text-gray-300">{post.likeCount}</span>
-                  </button>
-                  <button
-                    onClick={() => toggleComments(post._id)}
-                    className="icon-button flex items-center space-x-1 hover:text-blue-500 focus:outline-none p-2 rounded-full"
-                  >
-                    <FiMessageCircle size={20} className="text-gray-300 hover:text-blue-500" />
-                    <span className="text-sm text-gray-300">{post.commentCount}</span>
-                  </button>
-                </div>
+                  {/* Actions */}
+                  <div className="flex items-center space-x-6">
+                    <button
+                      onClick={() => handleLike(post._id)}
+                      className="flex items-center space-x-2 btn btn-ghost"
+                    >
+                      <FiHeart
+                        className={
+                          post.liked ? 'text-error' : 'text-base-content'
+                        }
+                      />
+                      <span>{post.likeCount}</span>
+                    </button>
+                    <button
+                      onClick={() => toggleComments(post._id)}
+                      className="flex items-center space-x-2 btn btn-ghost"
+                    >
+                      <FiMessageCircle />
+                      <span>{post.commentCount}</span>
+                    </button>
+                  </div>
 
-                {/* Comments Section */}
-                {cs.open && (
-                  <div className="px-4 pb-4">
-                    <div className="border-t border-gray-700 mt-2 pt-2 max-h-60 overflow-y-auto pr-1">
-                      {topComments.map((parent) => {
-                        return (
-                          <div key={parent._id} className="mb-4">
-                            {/* ── Parent Comment ──────────────────────────── */}
-                            <div className="flex">
-                              <img
-                                src={parent.author.avatarUrl || '/default-avatar.png'}
-                                alt="commenter-avatar"
-                                className="w-8 h-8 rounded-full object-cover mr-2"
-                              />
-                              <div className="flex-1">
-                                <div className="flex items-baseline space-x-2">
-                                  <a
-                                    href={`/profile/${parent.author._id}`}
-                                    className="text-gray-100 font-semibold hover:text-gray-300 text-sm"
-                                  >
-                                    {parent.author.firstName} {parent.author.lastName}
-                                  </a>
-                                  <span className="text-gray-500 text-xs">
-                                    {formatDate(parent.createdAt)}
-                                  </span>
-                                </div>
-                                <p className="text-gray-200 text-sm mt-1">{parent.content}</p>
-
-                                {/* ── Parent Comment Actions: like & reply ── */}
-                                <div className="flex items-center space-x-4 mt-1">
-                                  <button
-                                    onClick={() =>
-                                      handleCommentLike(post._id, parent._id)
-                                    }
-                                    className="icon-button flex items-center space-x-1 hover:text-red-500 focus:outline-none p-1 rounded-full"
-                                  >
-                                    {parent.liked ? (
-                                      <FiHeart size={16} className="text-red-500" />
-                                    ) : (
-                                      <FiHeart
-                                        size={16}
-                                        className="text-gray-400 hover:text-red-500"
-                                      />
-                                    )}
-                                    <span className="text-xs text-gray-400">
-                                      {parent.likeCount}
-                                    </span>
-                                  </button>
-                                  <button
-                                    onClick={() =>
-                                      handleShowReply(post._id, parent._id)
-                                    }
-                                    className="icon-button flex items-center space-x-1 hover:text-blue-500 focus:outline-none p-1 rounded-full"
-                                  >
-                                    <FiMessageCircle
-                                      size={16}
-                                      className="text-gray-400 hover:text-blue-500"
+                  {/* Comments */}
+                  {cs.open && (
+                    <div className="space-y-4">
+                      <div className="space-y-4 max-h-60 overflow-y-auto">
+                        {(cs.comments || []).map((c) => {
+                          const replies = (cs.comments || []).filter(
+                            (x) => x.parentComment === c._id
+                          );
+                          if (c.parentComment) return null;
+                          return (
+                            <div key={c._id} className="space-y-2">
+                              <div className="flex items-start space-x-3">
+                                <div className="avatar">
+                                  <div className="w-8 h-8 rounded-full">
+                                    <img
+                                      src={c.author.avatarUrl}
+                                      alt=""
                                     />
-                                    <span className="text-xs text-gray-400">Reply</span>
-                                  </button>
+                                  </div>
                                 </div>
+                                <div className="flex-1 space-y-1">
+                                  <div className="flex items-baseline justify-between">
+                                    <a
+                                      href={`/profile/${c.author._id}`}
+                                      className="font-medium"
+                                    >
+                                      {c.author.firstName}{' '}
+                                      {c.author.lastName}
+                                    </a>
+                                    <span className="text-xs text-base-content/60">
+                                      {formatDate(c.createdAt)}
+                                    </span>
+                                  </div>
+                                  <p>{c.content}</p>
+                                  <div className="flex items-center space-x-4">
+                                    <button
+                                      onClick={() =>
+                                        handleCommentLike(post._id, c._id)
+                                      }
+                                      className="btn btn-ghost btn-sm flex items-center space-x-1"
+                                    >
+                                      <FiHeart
+                                        className={
+                                          c.liked
+                                            ? 'text-error'
+                                            : 'text-base-content'
+                                        }
+                                      />
+                                      <span>{c.likeCount}</span>
+                                    </button>
+                                    <button
+                                      onClick={() =>
+                                        handleShowReply(post._id, c._id)
+                                      }
+                                      className="btn btn-ghost btn-sm flex items-center space-x-1"
+                                    >
+                                      <FiMessageCircle />
+                                      <span>Reply</span>
+                                    </button>
+                                  </div>
 
-                                {/* ── Render Replies to This Parent ─────────── */}
-                                {allComments
-                                  .filter((c) => c.parentComment === parent._id)
-                                  .map((child) => {
-                                    return (
-                                      <div key={child._id} className="flex mt-3 ml-10">
-                                        <img
-                                          src={child.author.avatarUrl || '/default-avatar.png'}
-                                          alt="replier-avatar"
-                                          className="w-8 h-8 rounded-full object-cover mr-2"
-                                        />
-                                        <div className="flex-1">
-                                          <div className="flex items-baseline space-x-2">
-                                            <a
-                                              href={`/profile/${child.author._id}`}
-                                              className="text-gray-100 font-semibold hover:text-gray-300 text-sm"
-                                            >
-                                              {child.author.firstName}{' '}
-                                              {child.author.lastName}
-                                            </a>
-                                            <span className="text-gray-500 text-xs">
-                                              {formatDate(child.createdAt)}
-                                            </span>
-                                          </div>
-                                          <p className="text-gray-200 text-sm mt-1">
-                                            {/* Mention only the immediate parent */}
-                                            <a
-                                              href={`/profile/${parent.author._id}`}
-                                              className="text-blue-600 hover:text-blue-500"
-                                            >
-                                              @{parent.author.firstName}
-                                            </a>{' '}
-                                            {child.content}
-                                          </p>
-
-                                          {/* ── Child Comment Actions ─────────── */}
-                                          <div className="flex items-center space-x-4 mt-1">
-                                            <button
-                                              onClick={() =>
-                                                handleCommentLike(post._id, child._id)
-                                              }
-                                              className="icon-button flex items-center space-x-1 hover:text-red-500 focus:outline-none p-1 rounded-full"
-                                            >
-                                              {child.liked ? (
-                                                <FiHeart size={16} className="text-red-500" />
-                                              ) : (
-                                                <FiHeart
-                                                  size={16}
-                                                  className="text-gray-400 hover:text-red-500"
-                                                />
-                                              )}
-                                              <span className="text-xs text-gray-400">
-                                                {child.likeCount}
-                                              </span>
-                                            </button>
-                                            <button
-                                              onClick={() =>
-                                                handleShowReply(post._id, child._id)
-                                              }
-                                              className="icon-button flex items-center space-x-1 hover:text-blue-500 focus:outline-none p-1 rounded-full"
-                                            >
-                                              <FiMessageCircle
-                                                size={16}
-                                                className="text-gray-400 hover:text-blue-500"
-                                              />
-                                              <span className="text-xs text-gray-400">
-                                                Reply
-                                              </span>
-                                            </button>
-                                          </div>
-
-                                          {/* ── Reply Input Under Child (if toggled) ── */}
-                                          {child.showReply && (
-                                            <form
-                                              onSubmit={(e) =>
-                                                handleReplySubmit(e, post._id, child._id)
-                                              }
-                                              className="flex items-center space-x-2 mt-2 ml-6"
-                                            >
-                                              <input
-                                                name={`reply-${child._id}`}
-                                                type="text"
-                                                placeholder="Write a reply…"
-                                                className="flex-1 bg-gray-900 text-white placeholder-gray-400 px-3 py-1 rounded focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
-                                              />
-                                              <button
-                                                type="submit"
-                                                className="icon-button p-1 rounded-full hover:bg-gray-700 focus:outline-none"
-                                              >
-                                                <FiChevronUp
-                                                  size={16}
-                                                  className="text-blue-600 hover:text-blue-500"
-                                                />
-                                              </button>
-                                            </form>
-                                          )}
+                                  {/* Replies */}
+                                  {replies.map((r) => (
+                                    <div
+                                      key={r._id}
+                                      className="flex items-start space-x-3 ml-10"
+                                    >
+                                      <div className="avatar">
+                                        <div className="w-8 h-8 rounded-full">
+                                          <img
+                                            src={r.author.avatarUrl}
+                                            alt=""
+                                          />
                                         </div>
                                       </div>
-                                    );
-                                  })}
+                                      <div className="flex-1 space-y-1">
+                                        <div className="flex items-baseline justify-between">
+                                          <a
+                                            href={`/profile/${r.author._id}`}
+                                            className="font-medium"
+                                          >
+                                            {r.author.firstName}{' '}
+                                            {r.author.lastName}
+                                          </a>
+                                          <span className="text-xs text-base-content/60">
+                                            {formatDate(r.createdAt)}
+                                          </span>
+                                        </div>
+                                        <p>
+                                          <a
+                                            href={`/profile/${c.author._id}`}
+                                            className="text-primary"
+                                          >
+                                            @{c.author.firstName}
+                                          </a>{' '}
+                                          {r.content}
+                                        </p>
+                                        <div className="flex items-center space-x-4">
+                                          <button
+                                            onClick={() =>
+                                              handleCommentLike(
+                                                post._id,
+                                                r._id
+                                              )
+                                            }
+                                            className="btn btn-ghost btn-sm flex items-center space-x-1"
+                                          >
+                                            <FiHeart
+                                              className={
+                                                r.liked
+                                                  ? 'text-error'
+                                                  : 'text-base-content'
+                                              }
+                                            />
+                                            <span>{r.likeCount}</span>
+                                          </button>
+                                          <button
+                                            onClick={() =>
+                                              handleShowReply(
+                                                post._id,
+                                                r._id
+                                              )
+                                            }
+                                            className="btn btn-ghost btn-sm flex items-center space-x-1"
+                                          >
+                                            <FiMessageCircle />
+                                            <span>Reply</span>
+                                          </button>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
 
-                                {/* ── Reply Input Under Parent (if toggled) ── */}
-                                {parent.showReply && (
-                                  <form
-                                    onSubmit={(e) =>
-                                      handleReplySubmit(e, post._id, parent._id)
-                                    }
-                                    className="flex items-center space-x-2 mt-2 ml-6"
-                                  >
-                                    <input
-                                      name={`reply-${parent._id}`}
-                                      type="text"
-                                      placeholder="Write a reply…"
-                                      className="flex-1 bg-gray-900 text-white placeholder-gray-400 px-3 py-1 rounded focus:outline-none focus:ring-2 focus:ring-blue-600 text-sm"
-                                    />
-                                    <button
-                                      type="submit"
-                                      className="icon-button p-1 rounded-full hover:bg-gray-700 focus:outline-none"
+                                  {c.showReply && (
+                                    <form
+                                      onSubmit={(e) =>
+                                        handleReplySubmit(e, post._id, c._id)
+                                      }
+                                      className="flex items-center space-x-2"
                                     >
-                                      <FiChevronUp
-                                        size={16}
-                                        className="text-blue-600 hover:text-blue-500"
+                                      <input
+                                        name={`reply-${c._id}`}
+                                        type="text"
+                                        placeholder="Write a reply…"
+                                        className="input input-sm input-bordered flex-1"
                                       />
-                                    </button>
-                                  </form>
-                                )}
+                                      <button
+                                        type="submit"
+                                        className="btn btn-circle btn-sm"
+                                      >
+                                        <FiChevronUp />
+                                      </button>
+                                    </form>
+                                  )}
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                          );
+                        })}
+                      </div>
 
-                    {/* ── New comment form ───────────────────────── */}
-                    <form
-                      onSubmit={(e) => handleCommentSubmit(e, post._id)}
-                      className="flex items-center space-x-2 mt-2"
-                    >
-                      <input
-                        type="text"
-                        placeholder="Write a comment…"
-                        value={cs.input}
-                        onChange={(e) =>
-                          handleCommentChange(post._id, e.target.value)
+                      {/* New Comment */}
+                      <form
+                        onSubmit={(e) =>
+                          handleCommentSubmit(e, post._id)
                         }
-                        className="flex-1 bg-gray-900 text-white placeholder-gray-400 px-3 py-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-600"
-                      />
-                      <button
-                        type="submit"
-                        className="icon-button p-2 rounded-full hover:bg-gray-700 focus:outline-none"
+                        className="flex items-center space-x-2"
                       >
-                        <FiMessageCircle
-                          size={20}
-                          className="text-blue-600 hover:text-blue-500"
+                        <input
+                          type="text"
+                          placeholder="Write a comment…"
+                          value={cs.input}
+                          onChange={(e) =>
+                            handleCommentChange(post._id, e.target.value)
+                          }
+                          className="input input-bordered flex-1"
                         />
-                      </button>
-                    </form>
-                  </div>
-                )}
+                        <button className="btn btn-circle btn-sm">
+                          <FiMessageCircle />
+                        </button>
+                      </form>
+                    </div>
+                  )}
+                </div>
               </div>
             );
           })
         )}
 
-        {/* Scroll‐to‐Top Button */}
         {showScroll && (
           <button
-            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-            className="icon-button fixed bottom-6 right-6 p-2 rounded-full hover:bg-gray-700 focus:outline-none"
+            onClick={() =>
+              window.scrollTo({ top: 0, behavior: 'smooth' })
+            }
+            className="btn btn-circle btn-primary fixed bottom-6 right-6"
           >
-            <FiChevronUp size={24} className="text-blue-600 hover:text-blue-500" />
+            <FiChevronUp />
           </button>
         )}
-      </div>
+      </section>
 
-      {/* ── Right Sidebar (Friends) ───────────────────────────────────────── */}
-      <div className="hidden lg:block lg:w-2/12">
-        <div className="bg-gray-800 rounded-lg p-4 h-[calc(100vh-4rem)] overflow-y-auto mb-6">
-          <h2 className="text-gray-100 text-lg font-semibold mb-3">Friends</h2>
-          <ul className="space-y-3">
-            {[
-              'Alice Wonderland',
-              'Bob Builder',
-              'Charlie Chaplin',
-              'Diana Prince',
-              'Eve Polastri',
-              'Frank Sinatra',
-              'Grace Hopper',
-              'Hank Scorpio',
-            ].map((name, idx) => {
-              const initials = name
-                .split(' ')
-                .map((n) => n[0])
-                .join('')
-                .toUpperCase();
-              const isOnline = idx % 2 === 0;
-              return (
-                <li
-                  key={idx}
-                  className="flex items-center space-x-3 p-2 rounded hover:bg-gray-700 cursor-pointer animate-fade-in"
-                  style={{ animationDelay: `${idx * 50}ms` }}
-                >
-                  <div className="w-8 h-8 bg-gray-600 text-white rounded-full flex items-center justify-center">
-                    {initials}
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-gray-100 text-sm">{name}</p>
-                    <p
-                      className={`text-xs ${isOnline ? 'text-green-400' : 'text-gray-500'
-                        }`}
-                    >
-                      {isOnline ? 'Online' : 'Offline'}
-                    </p>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      </div>
+      {/* Friends Sidebar */}
+      <FriendsSidebar />
 
-      {/* ── Lightbox Dialog ──────────────────────────────────────────────── */}
+      {/* Lightbox */}
       {lightboxOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-base-100/80 flex items-center justify-center z-50">
           <button
             onClick={() => setLightboxOpen(false)}
-            className="icon-button absolute top-4 right-4 p-2 rounded-full hover:bg-gray-700 focus:outline-none"
+            className="btn btn-circle btn-ghost absolute top-4 right-4"
           >
-            <FiX size={24} className="text-white" />
+            <FiX />
           </button>
           <img
             src={lightboxSrc}
+            className="max-w-full max-h-full"
             alt="full"
-            className="max-w-full max-h-full object-contain"
           />
         </div>
       )}
+
+      <input
+        type="file"
+        accept="image/*"
+        multiple
+        ref={fileInputRef}
+        onChange={onFileSelected}
+        className="hidden"
+      />
     </div>
   );
 }
