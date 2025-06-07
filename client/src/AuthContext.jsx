@@ -6,7 +6,7 @@ import { api } from './api';
 const AuthContext = createContext({
   user: null,
   authLoading: true,
-  login: async (email, password) => { },
+  login: async () => { },
   logout: async () => { },
 });
 
@@ -31,19 +31,18 @@ export function AuthProvider({ children }) {
   // On mount: check existing authToken
   useEffect(() => {
     (async () => {
+      // 1) If we still have a header token (old flow) attach it
       const stored = localStorage.getItem('authToken');
-      if (!stored) {
-        setAuthLoading(false);
-        return;
+      if (stored) {
+        api.defaults.headers.common['Authorization'] = `Bearer ${stored}`;
       }
 
-      api.defaults.headers.common['Authorization'] = `Bearer ${stored}`;
+      // 2) In every case, ping /auth/me (cookie travels automatically)
       try {
-        const { data } = await api.get('/auth/me');
+        const { data } = await api.get('/auth/me', { withCredentials: true });
         setUser(data.user);
-      } catch (err) {
-        console.error('Auth check failed:', err);
-        setToken(null);
+      } catch {
+        setToken(null);           // clears localStorage if it was wrong
         setUser(null);
       } finally {
         setAuthLoading(false);

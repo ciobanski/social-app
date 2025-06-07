@@ -4,7 +4,10 @@ import 'react-toastify/dist/ReactToastify.css';
 import AppTheme from './Theme.jsx';
 import AppRoutes from './Routes.jsx';
 
+
 export default function App() {
+
+
   return (
     <AppTheme>
       {/* Global toasts */}

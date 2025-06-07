@@ -1,24 +1,15 @@
 // src/pages/LoginPage.jsx
-
 import React, { useContext } from 'react';
-import {
-  Box,
-  Paper,
-  Typography,
-  TextField,
-  Button,
-  Link as MuiLink,
-} from '@mui/material';
 import { Link, useNavigate } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
 import AuthContext from '../AuthContext';
 import { toast } from 'react-toastify';
+import { FaGoogle } from 'react-icons/fa';
 
 const BG_URL =
-  'https://images.unsplash.com/photo-1633886038302-9710437f6ca2?' +
-  'q=80&w=1932&auto=format&fit=crop';
+  'https://images.unsplash.com/photo-1668681919287-7367677cdc4c?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D';
 
 const schema = yup
   .object({
@@ -40,16 +31,10 @@ export default function LoginPage() {
     formState: { errors, isSubmitting },
   } = useForm({ resolver: yupResolver(schema) });
 
-  const onSubmit = async (data) => {
-    // Use AuthContext.login to store under localStorage.authToken
-    const result = await login(data.email, data.password);
-    if (!result.success) {
-      toast.error(result.message || 'Login failed');
-      return;
-    }
-    // Clear any old “token” key just in case:
+  const onSubmit = async ({ email, password }) => {
+    const res = await login(email, password);
+    if (!res.success) return toast.error(res.message || 'Login failed');
     localStorage.removeItem('token');
-
     toast.success('Logged in successfully!');
     navigate('/');
   };
@@ -57,46 +42,26 @@ export default function LoginPage() {
   if (authLoading) return null;
 
   return (
-    <Box
-      sx={{
-        position: 'fixed',
-        inset: 0,
-        backgroundImage: `url(${BG_URL})`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat',
-      }}
+    <div
+      className="relative flex min-h-screen items-center bg-cover bg-center"
+      style={{ backgroundImage: `url(${BG_URL})` }}
     >
-      <Box
-        sx={{
-          height: '100%',
-          width: '100%',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <Paper
-          elevation={8}
-          sx={{
-            width: { xs: '90%', sm: 400 },
-            maxWidth: 400,
-            bgcolor: 'background.paper',
-            backdropFilter: 'blur(8px)',
-            p: 4,
-            borderRadius: 2,
-          }}
-        >
-          <Typography variant="h4" align="center" gutterBottom>
-            Log In
-          </Typography>
+      {/* dark overlay for legibility */}
+      <div className="absolute inset-0 bg-black/60 -z-10" />
 
-          <Box
-            component="form"
-            autoComplete="off"
-            onSubmit={handleSubmit(onSubmit)}
-            sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}
-          >
+      {/* ----------  LEFT 50 %  ---------- */}
+      <div className="hidden lg:flex w-1/2 items-center justify-end lg:pr-8">
+        <h2 className="max-w-lg break-words text-right text-7xl font-extrabold leading-tight text-white">
+          Fuckleyewt on ma jikkalyang snoopsnapp
+        </h2>
+      </div>
+
+      {/* ----------  RIGHT 50 %  ---------- */}
+      <div className="flex w-full lg:w-1/2 items-center justify-center lg:justify-start lg:pl-8 ">
+        <div className="w-full max-w-sm rounded-box bg-base-100/90 p-8 shadow-2xl backdrop-blur-md">
+          <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
+            <h1 className="text-center text-3xl font-semibold">Log&nbsp;In</h1>
+
             {['email', 'password'].map((name) => (
               <Controller
                 key={name}
@@ -104,44 +69,52 @@ export default function LoginPage() {
                 control={control}
                 defaultValue=""
                 render={({ field }) => (
-                  <TextField
-                    {...field}
-                    type={name}
-                    label={name === 'email' ? 'Email' : 'Password'}
-                    variant="filled"
-                    error={!!errors[name]}
-                    helperText={errors[name]?.message}
-                    autoComplete="new-password"
-                    sx={{
-                      '& .MuiFilledInput-root': {
-                        borderRadius: '4px',
-                        bgcolor: 'rgba(255,255,255,0.1)',
-                      },
-                      '& .MuiFilledInput-input:-webkit-autofill': {
-                        WebkitBoxShadow: `0 0 0 1000px rgba(255,255,255,0.1) inset`,
-                        WebkitTextFillColor: '#fff',
-                        borderRadius: '4px',
-                      },
-                    }}
-                    InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.7)' } }}
-                  />
+                  <div className="form-control">
+                    <input
+                      {...field}
+                      type={name}
+                      placeholder={name === 'email' ? 'Email' : 'Password'}
+                      autoComplete="new-password"
+                      className={`input input-bordered ${errors[name] ? 'input-error' : ''}`}
+                    />
+                    {/* reserve height so layout never jumps */}
+                    <span className="block min-h-[1.25rem] text-sm text-error">
+                      {errors[name]?.message ?? '\u00A0'}
+                    </span>
+                  </div>
                 )}
               />
             ))}
 
-            <Button type="submit" variant="contained" size="large" disabled={isSubmitting}>
+            <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
               {isSubmitting ? 'Logging in…' : 'Log In'}
-            </Button>
-          </Box>
+            </button>
+            <p className="text-end text-sm">
+              <Link to="/forgot-password" className="link link-secondary">
+                Forgot password?
+              </Link>
+            </p>
+            {/* OAuth divider */}
+            <div className="divider my-1 before:bg-base-content/20 after:bg-base-content/20">
+              OR
+            </div>
 
-          <Typography align="center" sx={{ mt: 2, color: 'text.secondary' }}>
-            Don’t have an account?{' '}
-            <MuiLink component={Link} to="/signup" color="secondary">
-              Sign up
-            </MuiLink>
-          </Typography>
-        </Paper>
-      </Box>
-    </Box>
+            <a
+              href={`${import.meta.env.VITE_API_URL}/auth/google`}
+              className="btn btn-outline gap-2"
+            >
+              <FaGoogle className="h-5 w-5" />
+              Continue with Google
+            </a>
+            <p className="text-center text-sm opacity-70">
+              Don’t have an account?{' '}
+              <Link to="/signup" className="link link-secondary ms-1">
+                Sign up
+              </Link>
+            </p>
+          </form>
+        </div>
+      </div>
+    </div >
   );
 }
