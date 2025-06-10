@@ -1,48 +1,66 @@
-// src/components/Header.jsx
-
-import React, { useContext } from 'react';
+import React, { useContext, useState, useEffect } from 'react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import AuthContext from '../AuthContext';
-import { FiSearch, FiUser, FiSettings, FiLogOut } from 'react-icons/fi';
+import {
+  FiSearch,
+  FiUser,
+  FiSettings,
+  FiLogOut,
+  FiSun,
+  FiMoon,
+} from 'react-icons/fi';
 
 export default function Header() {
   const navigate = useNavigate();
   const { user, logout } = useContext(AuthContext);
 
+  const [theme, setTheme] = useState(
+    localStorage.getItem('theme') || 'light'
+  );
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+  const toggleTheme = () => setTheme((t) => (t === 'light' ? 'dark' : 'light'));
+
   return (
     <header className="fixed top-0 left-0 w-full h-16 bg-base-100 shadow-md flex items-center px-4 z-50">
-      {/* Logo */}
       <RouterLink to="/" className="text-2xl font-bold text-primary">
         Echo
       </RouterLink>
 
       {/* Search */}
       <div className="flex-1 flex justify-center px-4">
-        <div className="form-control w-full max-w-md">
-          <label className="input-group">
-            <span className="bg-base-200">
-              <FiSearch />
-            </span>
-            <input
-              type="text"
-              placeholder="Search…"
-              className="input input-bordered w-full"
-            />
-          </label>
+        <div className="relative w-full max-w-md">
+          <FiSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-base-content/60" />
+          <input
+            type="text"
+            placeholder="Search…"
+            className="input input-bordered w-full pl-12 pr-4 rounded-full"
+          />
         </div>
       </div>
 
       {/* Icons */}
       <nav className="flex items-center space-x-4">
+        <button
+          onClick={toggleTheme}
+          className="icon-button text-lg hover:text-primary transition"
+          aria-label="Toggle dark/light mode"
+        >
+          {theme === 'light' ? <FiMoon /> : <FiSun />}
+        </button>
         <RouterLink
           to={user ? `/profile/${user.id}` : '/login'}
-          className="text-lg hover:text-primary transition"
+          className="icon-button text-lg hover:text-primary transition"
+          aria-label="Your profile"
         >
           <FiUser />
         </RouterLink>
         <RouterLink
           to="/settings"
-          className="text-lg hover:text-primary transition"
+          className="icon-button text-lg hover:text-primary transition"
+          aria-label="Settings"
         >
           <FiSettings />
         </RouterLink>
@@ -53,7 +71,8 @@ export default function Header() {
             logout();
             navigate('/login');
           }}
-          className="text-lg hover:text-primary transition"
+          className="icon-button text-lg hover:text-primary transition"
+          aria-label="Log out"
         >
           <FiLogOut />
         </RouterLink>

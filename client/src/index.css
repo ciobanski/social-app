@@ -4,13 +4,11 @@
   themes: light --default, dark --prefersdark, cupcake;
 }
 
-
-
 html,
 body,
 #root {
   height: 100%;
-  margin: 0
+  margin: 0;
 }
 
 body {
@@ -66,18 +64,23 @@ button:focus-visible {
 
 /* Icon‐only button override */
 .icon-button {
-  background-color: transparent;
-  padding: 0;
-  border: none;
+  background-color: transparent !important;
+  padding: 0 !important;
+  border: none !important;
   cursor: pointer;
 }
 
 .icon-button:hover {
-  background-color: transparent;
+  background-color: transparent !important;
 }
 
 .icon-button:focus {
   outline: none;
+}
+
+/* Input & Search Fixes */
+input.input {
+  /* keep DaisyUI input rules */
 }
 
 @media (prefers-color-scheme: light) {
@@ -93,4 +96,26 @@ button:focus-visible {
   button {
     background-color: #f9f9f9;
   }
+}
+
+@keyframes shake {
+
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+
+  20%,
+  60% {
+    transform: translateX(-2px);
+  }
+
+  40%,
+  80% {
+    transform: translateX(2px);
+  }
+}
+
+.shake {
+  animation: shake 0.3s;
 }

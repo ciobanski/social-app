@@ -10,6 +10,7 @@ const FeedPage = lazy(() => import('./pages/FeedPage'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 const NotificationsPage = lazy(() => import('./pages/NotificationsPage'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
+const SavedPostsPage = lazy(() => import('./pages/SavedPostsPage'));
 
 const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
 
@@ -26,6 +27,7 @@ export default function AppRoutes() {
           <Route element={<Layout />}>
             <Route path="/" element={<FeedPage />} />
             <Route path="/profile/:id" element={<ProfilePage />} />
+            <Route path="saved" element={<SavedPostsPage />} />
             <Route path="/notifications" element={<NotificationsPage />} />
             {/* admin only */}
             <Route
