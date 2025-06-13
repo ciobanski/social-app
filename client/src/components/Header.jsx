@@ -1,3 +1,5 @@
+// src/components/Header.jsx
+
 import React, { useContext, useState, useEffect } from 'react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import AuthContext from '../AuthContext';
@@ -9,6 +11,8 @@ import {
   FiSun,
   FiMoon,
 } from 'react-icons/fi';
+import NotificationBell from './NotificationBell';
+
 
 export default function Header() {
   const navigate = useNavigate();
@@ -21,7 +25,7 @@ export default function Header() {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('theme', theme);
   }, [theme]);
-  const toggleTheme = () => setTheme((t) => (t === 'light' ? 'dark' : 'light'));
+  const toggleTheme = () => setTheme(t => (t === 'light' ? 'dark' : 'light'));
 
   return (
     <header className="fixed top-0 left-0 w-full h-16 bg-base-100 shadow-md flex items-center px-4 z-50">
@@ -43,6 +47,7 @@ export default function Header() {
 
       {/* Icons */}
       <nav className="flex items-center space-x-4">
+        {/* theme toggle */}
         <button
           onClick={toggleTheme}
           className="icon-button text-lg hover:text-primary transition"
@@ -50,6 +55,11 @@ export default function Header() {
         >
           {theme === 'light' ? <FiMoon /> : <FiSun />}
         </button>
+
+        {/* notification bell */}
+        <NotificationBell />
+
+        {/* profile */}
         <RouterLink
           to={user ? `/profile/${user.id}` : '/login'}
           className="icon-button text-lg hover:text-primary transition"
@@ -57,6 +67,8 @@ export default function Header() {
         >
           <FiUser />
         </RouterLink>
+
+        {/* settings */}
         <RouterLink
           to="/settings"
           className="icon-button text-lg hover:text-primary transition"
@@ -64,9 +76,11 @@ export default function Header() {
         >
           <FiSettings />
         </RouterLink>
+
+        {/* logout */}
         <RouterLink
           to="#"
-          onClick={(e) => {
+          onClick={e => {
             e.preventDefault();
             logout();
             navigate('/login');

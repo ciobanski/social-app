@@ -80,7 +80,8 @@ router.get('/users/me/saves', auth, async (req, res) => {
         path: 'post',
         populate: { path: 'author', select: 'firstName lastName avatarUrl' }
       });
-    res.json(saves.map(s => s.post));
+
+    res.json(saves.map(s => s.post).filter(p => p));
   } catch (err) {
     console.error('List saves error:', err);
     res.status(500).json({ message: err.message });

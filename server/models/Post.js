@@ -8,13 +8,11 @@ const postSchema = new mongoose.Schema(
     content: {
       type: String,
       trim: true,
-      // ↑ Changed from maxlength: 1000 to a larger limit (or remove it)
-      maxlength: 2000,   // ← e.g. allow up to 2000 characters
-      // OR simply comment out maxlength if you want no limit:
-      // maxlength: undefined,
+      maxlength: 2000,
     },
-    imageUrls: [String], // array of Cloudinary URLs
-    hashtags: [String],
+    imageUrls: { type: [String], default: [] }, // array of Cloudinary URLs
+    videoUrls: { type: [String], default: [] }, // array of Cloudinary URLs for videos
+    hashtags: { type: [String], default: [] },
     visibility: {
       type: String,
       enum: ['public', 'friends', 'private'],
@@ -24,7 +22,7 @@ const postSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Preserve your existing timezone‐transform so dates come back in “DD-MM-YYYY HH:mm:ss”
+// Preserve existing timezone transform
 applyTZTransform(postSchema);
 
 module.exports = mongoose.model('Post', postSchema);

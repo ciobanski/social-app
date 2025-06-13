@@ -9,30 +9,18 @@ import { api } from '../api';
 import AuthContext from '../AuthContext';
 import { toast } from 'react-toastify';
 
-/* Tailwind classes will replace most MUI styling:
-   - Dialog → fixed inset-0 bg-black/50 flex items-center justify-center
-   - DialogContent → bg-white dark:bg-gray-800 p-6 rounded-lg w-full max-w-lg
-   - Form fields → block w-full border border-gray-300 dark:border-gray-600 rounded px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
-   - Buttons → bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded
-*/
-
-const profileSchema = yup
-  .object({
-    firstName: yup.string().required('First name is required'),
-    lastName: yup.string().required('Last name is required'),
-    country: yup.string().max(56, 'Max 56 characters').nullable(),
-    birthday: yup
-      .string()
-      .nullable()
-      .test('is-date', 'Invalid date', (val) =>
-        !val || dayjs(val, 'YYYY-MM-DD', true).isValid()
-      ),
-    birthdayVisibility: yup
-      .mixed()
-      .oneOf(['public', 'friends', 'private'])
-      .required(),
-  })
-  .required();
+const profileSchema = yup.object({
+  firstName: yup.string().required('First name is required'),
+  lastName: yup.string().required('Last name is required'),
+  country: yup.string().max(56, 'Max 56 characters').nullable(),
+  birthday: yup.string()
+    .nullable()
+    .test('is-date', 'Invalid date', v => !v || dayjs(v, 'YYYY-MM-DD', true).isValid()),
+  birthdayVisibility: yup
+    .mixed()
+    .oneOf(['public', 'friends', 'private'])
+    .required(),
+}).required();
 
 export default function EditProfileModal({ open, onClose, profile, setProfile, reloadMe }) {
   const [uploading, setUploading] = useState(false);
@@ -51,10 +39,10 @@ export default function EditProfileModal({ open, onClose, profile, setProfile, r
       country: '',
       birthday: '',
       birthdayVisibility: 'friends',
-    },
+    }
   });
 
-  // Populate form when profile loads
+  // populate
   useEffect(() => {
     if (!profile) return;
     reset({
@@ -62,50 +50,48 @@ export default function EditProfileModal({ open, onClose, profile, setProfile, r
       lastName: profile.lastName,
       country: profile.country || '',
       birthday: profile.birthday ? dayjs(profile.birthday).format('YYYY-MM-DD') : '',
-      birthdayVisibility: profile.birthdayVisibility || 'friends',
+      birthdayVisibility: profile.birthdayVisibility || 'friends'
     });
   }, [profile, reset]);
 
-  // Handle avatar upload
-  const handleAvatarChange = async (e) => {
+  // avatar upload
+  const handleAvatarChange = async e => {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
     try {
-      const formData = new FormData();
-      formData.append('avatar', file);
-      const { data } = await api.post('/users/me/avatar', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+      const form = new FormData();
+      form.append('avatar', file);
+      const { data } = await api.post('/users/me/avatar', form, {
+        headers: { 'Content-Type': 'multipart/form-data' }
       });
-      setProfile((p) => ({ ...p, avatarUrl: data.avatarUrl }));
+      setProfile(p => ({ ...p, avatarUrl: data.avatarUrl }));
       await reloadMe();
       toast.success('Avatar updated!');
-    } catch (err) {
-      console.error(err);
-      toast.error('Failed to upload avatar.');
+    } catch {
+      toast.error('Upload failed');
     } finally {
       setUploading(false);
     }
   };
 
-  // Submit updated profile
-  const onSave = async (formData) => {
+  // form submit
+  const onSave = async vals => {
     try {
       const payload = {
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        country: formData.country || undefined,
-        birthday: formData.birthday || null,
-        birthdayVisibility: formData.birthdayVisibility,
+        firstName: vals.firstName,
+        lastName: vals.lastName,
+        country: vals.country || undefined,
+        birthday: vals.birthday || null,
+        birthdayVisibility: vals.birthdayVisibility,
       };
       const { data: updated } = await api.put('/users/me', payload);
-      setProfile((p) => ({ ...p, ...updated }));
+      setProfile(p => ({ ...p, ...updated }));
       await reloadMe();
       toast.success('Profile updated!');
       onClose();
-    } catch (err) {
-      console.error(err);
-      toast.error('Failed to save profile.');
+    } catch {
+      toast.error('Save failed');
     }
   };
 
@@ -113,37 +99,24 @@ export default function EditProfileModal({ open, onClose, profile, setProfile, r
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-lg p-6">
-        <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-100 mb-4">Edit Profile</h2>
+      <div className="card bg-base-200 dark:bg-base-300 border border-base-content/10 shadow-lg w-full max-w-lg p-6">
+        <h3 className="text-xl font-semibold mb-4 text-base-content">Edit Profile</h3>
+
         <form onSubmit={handleSubmit(onSave)} className="space-y-4">
+
           {/* Avatar Picker */}
-          <div className="flex justify-center mb-4">
-            <div className="relative">
-              <img
-                src={profile.avatarUrl}
-                alt="Avatar"
-                className="w-20 h-20 rounded-full object-cover"
-              />
+          <div className="flex justify-center">
+            <div className="relative avatar">
+              <div className="w-24 h-24 rounded-full ring ring-primary ring-offset-2 overflow-hidden">
+                <img src={profile.avatarUrl} alt="avatar" />
+              </div>
               <button
                 type="button"
                 onClick={() => fileInputRef.current.click()}
                 disabled={uploading}
-                className="absolute bottom-0 right-0 bg-indigo-600 hover:bg-indigo-700 text-white p-1 rounded-full"
+                className="btn btn-sm btn-primary btn-circle absolute bottom-0 right-0"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-4 w-4"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M5 13l4 4L19 7"
-                  />
-                </svg>
+                ✎
               </button>
               <input
                 type="file"
@@ -156,9 +129,9 @@ export default function EditProfileModal({ open, onClose, profile, setProfile, r
           </div>
 
           {/* First Name */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              First Name
+          <div className="form-control w-full">
+            <label className="label">
+              <span className="label-text">First Name</span>
             </label>
             <Controller
               name="firstName"
@@ -167,21 +140,24 @@ export default function EditProfileModal({ open, onClose, profile, setProfile, r
                 <input
                   {...field}
                   type="text"
-                  className={`block w-full border ${errors.firstName ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
-                    } rounded px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100`}
                   placeholder="First Name"
+                  className={`input input-bordered w-full ${errors.firstName ? 'input-error' : ''}`}
                 />
               )}
             />
             {errors.firstName && (
-              <p className="text-red-500 text-sm mt-1">{errors.firstName.message}</p>
+              <label className="label">
+                <span className="label-text-alt text-error">
+                  {errors.firstName.message}
+                </span>
+              </label>
             )}
           </div>
 
           {/* Last Name */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Last Name
+          <div className="form-control w-full">
+            <label className="label">
+              <span className="label-text">Last Name</span>
             </label>
             <Controller
               name="lastName"
@@ -190,21 +166,24 @@ export default function EditProfileModal({ open, onClose, profile, setProfile, r
                 <input
                   {...field}
                   type="text"
-                  className={`block w-full border ${errors.lastName ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
-                    } rounded px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100`}
                   placeholder="Last Name"
+                  className={`input input-bordered w-full ${errors.lastName ? 'input-error' : ''}`}
                 />
               )}
             />
             {errors.lastName && (
-              <p className="text-red-500 text-sm mt-1">{errors.lastName.message}</p>
+              <label className="label">
+                <span className="label-text-alt text-error">
+                  {errors.lastName.message}
+                </span>
+              </label>
             )}
           </div>
 
           {/* Country */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Country
+          <div className="form-control w-full">
+            <label className="label">
+              <span className="label-text">Country</span>
             </label>
             <Controller
               name="country"
@@ -213,21 +192,24 @@ export default function EditProfileModal({ open, onClose, profile, setProfile, r
                 <input
                   {...field}
                   type="text"
-                  className={`block w-full border ${errors.country ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
-                    } rounded px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100`}
                   placeholder="Country"
+                  className={`input input-bordered w-full ${errors.country ? 'input-error' : ''}`}
                 />
               )}
             />
             {errors.country && (
-              <p className="text-red-500 text-sm mt-1">{errors.country.message}</p>
+              <label className="label">
+                <span className="label-text-alt text-error">
+                  {errors.country.message}
+                </span>
+              </label>
             )}
           </div>
 
           {/* Birthday */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Birthday
+          <div className="form-control w-full">
+            <label className="label">
+              <span className="label-text">Birthday</span>
             </label>
             <Controller
               name="birthday"
@@ -236,47 +218,42 @@ export default function EditProfileModal({ open, onClose, profile, setProfile, r
                 <input
                   {...field}
                   type="date"
-                  className={`block w-full border ${errors.birthday ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
-                    } rounded px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100`}
+                  className={`input input-bordered w-full ${errors.birthday ? 'input-error' : ''}`}
                 />
               )}
             />
             {errors.birthday && (
-              <p className="text-red-500 text-sm mt-1">{errors.birthday.message}</p>
+              <label className="label">
+                <span className="label-text-alt text-error">
+                  {errors.birthday.message}
+                </span>
+              </label>
             )}
           </div>
 
           {/* Birthday Visibility */}
-          <div>
-            <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Birthday Visibility
-            </p>
+          <div className="form-control w-full">
+            <label className="label"><span className="label-text">Birthday Visibility</span></label>
             <Controller
               name="birthdayVisibility"
               control={control}
               render={({ field }) => (
-                <div className="flex space-x-4">
-                  {['public', 'friends', 'private'].map((opt) => (
-                    <label key={opt} className="inline-flex items-center space-x-2">
-                      <input
-                        type="radio"
-                        value={opt}
-                        checked={field.value === opt}
-                        onChange={() => field.onChange(opt)}
-                        className="form-radio text-indigo-600"
-                      />
-                      <span className="text-gray-700 dark:text-gray-300">
-                        {opt.charAt(0).toUpperCase() + opt.slice(1)}
-                      </span>
-                    </label>
-                  ))}
-                </div>
+                <select
+                  {...field}
+                  className={`select select-bordered w-full ${errors.birthdayVisibility ? 'select-error' : ''}`}
+                >
+                  <option value="public">Public</option>
+                  <option value="friends">Friends</option>
+                  <option value="private">Private</option>
+                </select>
               )}
             />
             {errors.birthdayVisibility && (
-              <p className="text-red-500 text-sm mt-1">
-                {errors.birthdayVisibility.message}
-              </p>
+              <label className="label">
+                <span className="label-text-alt text-error">
+                  {errors.birthdayVisibility.message}
+                </span>
+              </label>
             )}
           </div>
 
@@ -286,14 +263,14 @@ export default function EditProfileModal({ open, onClose, profile, setProfile, r
               type="button"
               onClick={onClose}
               disabled={isSubmitting}
-              className="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-800 dark:text-gray-200 rounded hover:bg-gray-400 dark:hover:bg-gray-500"
+              className="btn btn-ghost"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded"
+              className="btn btn-primary"
             >
               {isSubmitting ? 'Saving…' : 'Save'}
             </button>

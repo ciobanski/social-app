@@ -1,21 +1,26 @@
 // src/main.jsx
-import React from 'react';
+import React, { useContext } from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import AuthContext, { AuthProvider } from './AuthContext';
-import SocketProvider from './contexts/SocketContext.jsx'; // or wherever yours lives
-import App from './App.jsx';
+import SocketProvider from './contexts/SocketContext';
+import App from './App';
 import './index.css';
 
-const token = localStorage.getItem('token');
+function AppWithSockets() {
+  const { token } = useContext(AuthContext);
+  return (
+    <SocketProvider token={token}>
+      <App />
+    </SocketProvider>
+  );
+}
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter>
       <AuthProvider>
-        <SocketProvider token={token}>
-          <App />
-        </SocketProvider>
+        <AppWithSockets />
       </AuthProvider>
     </BrowserRouter>
   </React.StrictMode>

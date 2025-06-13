@@ -32,7 +32,7 @@ const searchRoutes = require('./routes/search');
 const storiesRoutes = require('./routes/stories');
 const friendsRoutes = require('./routes/friends');
 const presenceRoutes = require('./routes/presence');
-
+const notificationsRoutes = require('./routes/notifications');
 
 const app = express();
 const server = http.createServer(app);
@@ -132,7 +132,7 @@ app.use('/api/trending', trendingRoutes);
 app.use('/api/stories', storiesRoutes);
 app.use('/api/friends', friendsRoutes);
 app.use('/api/presence', presenceRoutes);
-
+app.use('/api/notifications', notificationsRoutes);
 // ── Health Check ───────────────────────────────────────────────
 app.get('/', (req, res) => res.send('API is up and running!'));
 

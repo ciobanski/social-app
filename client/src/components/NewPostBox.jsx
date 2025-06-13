@@ -3,15 +3,15 @@ import { useDropzone } from 'react-dropzone';
 import { useForm, Controller } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
-import { FiImage, FiX } from 'react-icons/fi';
+import { FiImage, FiVideo, FiSmile, FiX } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import { api } from '../api';
+import EmojiPicker from 'emoji-picker-react';
+
 import '../index.css'; // for shake animation
 
 const schema = yup
-  .object({
-    content: yup.string().nullable(),
-  })
+  .object({ content: yup.string().nullable() })
   .required();
 
 export default function NewPostBox({ onNewPost }) {
@@ -19,30 +19,37 @@ export default function NewPostBox({ onNewPost }) {
   const [files, setFiles] = useState([]);
   const [previews, setPreviews] = useState([]);
   const [shake, setShake] = useState(false);
-  const fileInputRef = useRef();
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const fileImageRef = useRef();
+  const fileVideoRef = useRef();
+  const textareaRef = useRef();
 
+  // Handle dropped files
   const onDrop = useCallback(
-    (accepted) => {
+    accepted => {
       const total = files.length + accepted.length;
       if (total > 15) {
         toast.error('Maximum of 15 files allowed.');
         return;
       }
-      const valid = accepted.filter((f) => /(image|video)\//.test(f.type));
-      if (!valid.length) return;
-      const newPreviews = valid.map((f) => ({
+      const valid = accepted.filter(f => /(image|video)\//.test(f.type));
+      const newPreviews = valid.map(f => ({
         src: URL.createObjectURL(f),
         type: f.type.startsWith('video/') ? 'video' : 'image',
       }));
-      setFiles((p) => [...p, ...valid]);
-      setPreviews((p) => [...p, ...newPreviews]);
+      setFiles(prev => [...prev, ...valid]);
+      setPreviews(prev => [...prev, ...newPreviews]);
     },
     [files]
   );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    accept: { 'image/*': [], 'video/*': [] },
+    accept: {
+      'image/png': [], 'image/jpeg': [], 'image/webp': [], 'image/jfif': [],
+      'video/mp4': [], 'video/webm': []
+    },
     multiple: true,
     noClick: true,
     noKeyboard: true,
@@ -53,7 +60,7 @@ export default function NewPostBox({ onNewPost }) {
     handleSubmit,
     reset,
     watch,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting }
   } = useForm({
     resolver: yupResolver(schema),
     defaultValues: { content: '' },
@@ -61,18 +68,45 @@ export default function NewPostBox({ onNewPost }) {
 
   const content = watch('content') || '';
 
-  // Shake on over-limit attempts
-  const handleKeyDown = (e) => {
-    if (content.length >= CHARACTER_LIMIT && !['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+  // Prevent over-limit typing
+  const handleKeyDown = e => {
+    if (
+      content.length >= CHARACTER_LIMIT &&
+      !['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight'].includes(e.key)
+    ) {
       e.preventDefault();
       setShake(true);
       setTimeout(() => setShake(false), 500);
     }
   };
 
-  const handlePhotoClick = () => fileInputRef.current.click();
-  const onFileSelected = (e) => onDrop(Array.from(e.target.files || []));
+  // Open pickers
+  const handleImageClick = () => fileImageRef.current.click();
+  const handleVideoClick = () => fileVideoRef.current.click();
+  const handleEmojiClick = () => setShowEmojiPicker(v => !v);
 
+  // Insert emoji at cursor position
+  const onEmojiSelect = (emojiData) => {
+    const emoji = emojiData.emoji;
+    const el = textareaRef.current;
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    const before = content.slice(0, start);
+    const after = content.slice(end);
+    const newValue = before + emoji + after;
+    reset({ content: newValue });
+    setShowEmojiPicker(false);
+    setTimeout(() => {
+      el.setSelectionRange(start + emoji.length, start + emoji.length);
+      el.focus();
+    }, 0);
+  };
+
+  // File picker change handlers
+  const onFileImageChange = e => onDrop(Array.from(e.target.files || []));
+  const onFileVideoChange = e => onDrop(Array.from(e.target.files || []));
+
+  // Submit post
   const onPost = async ({ content }) => {
     const trimmed = content.trim();
     if (!trimmed && files.length === 0) {
@@ -82,26 +116,32 @@ export default function NewPostBox({ onNewPost }) {
     try {
       const form = new FormData();
       form.append('content', trimmed);
-      files.forEach((f) => {
+      files.forEach(f => {
         const field = f.type.startsWith('video/') ? 'videos' : 'images';
         form.append(field, f);
       });
       const res = await api.post('/posts', form, {
         headers: { 'Content-Type': 'multipart/form-data' },
+        onUploadProgress: e => {
+          setUploadProgress(Math.round((e.loaded * 100) / e.total));
+        },
       });
       onNewPost(res.data);
-      reset();
-      previews.forEach((p) => URL.revokeObjectURL(p.src));
+      reset({ content: '' });               // clear text
+      previews.forEach(p => URL.revokeObjectURL(p.src));
       setFiles([]);
       setPreviews([]);
+      setUploadProgress(0);
       toast.success('Posted!');
     } catch {
       toast.error('Could not create post');
+      setUploadProgress(0);
     }
   };
 
+  // Cleanup previews
   useEffect(() => {
-    return () => previews.forEach((p) => URL.revokeObjectURL(p.src));
+    return () => previews.forEach(p => URL.revokeObjectURL(p.src));
   }, [previews]);
 
   return (
@@ -111,48 +151,112 @@ export default function NewPostBox({ onNewPost }) {
         }`}
     >
       <input {...getInputProps()} />
-      <form onSubmit={handleSubmit(onPost)} className="space-y-2">
+      <form onSubmit={handleSubmit(onPost)} className="space-y-2 relative">
         <Controller
           name="content"
           control={control}
           render={({ field }) => (
-            <textarea
-              {...field}
-              placeholder="What's on your mind?"
-              className={`textarea textarea-bordered w-full max-h-64 min-h-24 resize-y`}
-              maxLength={CHARACTER_LIMIT}
-              onKeyDown={handleKeyDown}
-            />
+            <div className="relative">
+              <textarea
+                {...field}
+                ref={textareaRef}
+                placeholder="What's on your mind?"
+                className="textarea textarea-bordered w-full max-h-64 min-h-24 resize-y pr-10"
+                maxLength={CHARACTER_LIMIT}
+                onKeyDown={handleKeyDown}
+              />
+              <icon-button
+                type="button"
+                onClick={handleEmojiClick}
+                className="absolute top-2 right-2 text-gray-600 dark:text-gray-300 hover:text-primary"
+                aria-label="Add emoji"
+              >
+                <FiSmile size={20} />
+              </icon-button>
+              {showEmojiPicker && (
+                <div className="absolute top-full right-2 mt-1 z-20 bg-base-300 dark:bg-base-800 p-2 rounded shadow-lg">
+                  <button
+                    type="button"
+                    onClick={() => setShowEmojiPicker(false)}
+                    className="float-right mb-1 text-white"
+                    aria-label="Close emoji picker"
+                  >
+                    <FiX size={20} />
+                  </button>
+                  <EmojiPicker
+                    onEmojiClick={onEmojiSelect}
+                    theme="dark"
+                  />
+                </div>
+              )}
+            </div>
           )}
         />
         {errors.content && (
           <p className="text-error text-sm">{errors.content.message}</p>
         )}
-        <div className={`text-sm ${content.length >= CHARACTER_LIMIT ? 'text-error' : 'text-base-content/60'} ${shake ? 'shake' : ''}`}>
+        <div
+          className={`text-sm ${content.length >= CHARACTER_LIMIT
+            ? 'text-error'
+            : 'text-base-content/60'
+            } ${shake ? 'shake' : ''}`}
+        >
           {content.length}/{CHARACTER_LIMIT}
         </div>
 
-        <div className="flex justify-between items-center">
-          <button
-            type="button"
-            onClick={handlePhotoClick}
-            className="icon-button text-gray-600 dark:text-gray-300 hover:text-primary transition"
-            aria-label="Add file"
+        {uploadProgress > 0 && (
+          <progress
+            className="progress progress-primary w-full"
+            value={uploadProgress}
+            max="100"
           >
-            <FiImage size={20} />
-          </button>
-          <button type="submit" disabled={isSubmitting} className="btn btn-primary">
+            {uploadProgress}%
+          </progress>
+        )}
+
+        <div className="flex justify-between items-center">
+          <div className="flex space-x-2">
+            <button
+              type="button"
+              onClick={handleImageClick}
+              className="icon-button text-gray-600 dark:text-gray-300 hover:text-primary"
+              aria-label="Add images"
+            >
+              <FiImage size={20} />
+            </button>
+            <button
+              type="button"
+              onClick={handleVideoClick}
+              className="icon-button text-gray-600 dark:text-gray-300 hover:text-primary"
+              aria-label="Add videos"
+            >
+              <FiVideo size={20} />
+            </button>
+          </div>
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="btn btn-primary"
+          >
             {isSubmitting ? 'Posting…' : 'Post'}
           </button>
         </div>
 
         <input
           type="file"
-          accept="image/*,video/*"
+          accept="image/png,image/jpeg,image/webp,image/jfif"
           multiple
-          ref={fileInputRef}
+          ref={fileImageRef}
           className="hidden"
-          onChange={onFileSelected}
+          onChange={onFileImageChange}
+        />
+        <input
+          type="file"
+          accept="video/mp4,video/webm"
+          multiple
+          ref={fileVideoRef}
+          className="hidden"
+          onChange={onFileVideoChange}
         />
 
         {previews.length > 0 && (
@@ -179,8 +283,8 @@ export default function NewPostBox({ onNewPost }) {
                 <button
                   type="button"
                   onClick={() => {
-                    setFiles((f) => f.filter((_, idx) => idx !== i));
-                    setPreviews((pr) => pr.filter((_, idx) => idx !== i));
+                    setFiles(f => f.filter((_, idx) => idx !== i));
+                    setPreviews(pr => pr.filter((_, idx) => idx !== i));
                   }}
                   className="icon-button absolute top-1 right-1 text-white"
                   aria-label="Remove file"
@@ -197,6 +301,11 @@ export default function NewPostBox({ onNewPost }) {
           </div>
         )}
       </form>
+      {isDragActive && (
+        <div className="absolute inset-0 bg-black bg-opacity-30 flex items-center justify-center">
+          <p className="text-white text-lg">Drop files here</p>
+        </div>
+      )}
     </div>
   );
 }

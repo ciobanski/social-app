@@ -4,25 +4,35 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import AuthContext from './AuthContext';
 import Layout from './components/Layout';
 
-// lazy-loaded pages
+// lazy‐loaded pages
 const AuthPage = lazy(() => import('./pages/AuthPage'));
 const FeedPage = lazy(() => import('./pages/FeedPage'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 const NotificationsPage = lazy(() => import('./pages/NotificationsPage'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
 const SavedPostsPage = lazy(() => import('./pages/SavedPostsPage'));
-
 const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
 
 export default function AppRoutes() {
-  const { user } = useContext(AuthContext);
+  const { user, authLoading } = useContext(AuthContext);
+
+  // 1️⃣ While we’re still checking session, don’t render ANYTHING:
+  if (authLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        Loading…
+      </div>
+    );
+  }
 
   return (
-    <Suspense fallback={<div className="flex h-screen items-center justify-center">
-      Loading…
-    </div>}>
+    <Suspense fallback={
+      <div className="flex h-screen items-center justify-center">
+        Loading…
+      </div>
+    }>
       {user ? (
-        /* ───────────────  PRIVATE (logged-in)  ─────────────── */
+        /* ───────────── PRIVATE ───────────── */
         <Routes>
           <Route element={<Layout />}>
             <Route path="/" element={<FeedPage />} />
@@ -32,13 +42,18 @@ export default function AppRoutes() {
             {/* admin only */}
             <Route
               path="/admin"
-              element={user.role === 'admin' ? <AdminDashboard /> : <Navigate to="/" />}
+              element={
+                // 2️⃣ Optional‐chain here so we never do `null.role`
+                user?.role === 'admin'
+                  ? <AdminDashboard />
+                  : <Navigate to="/" />
+              }
             />
             <Route path="*" element={<Navigate to="/" />} />
           </Route>
         </Routes>
       ) : (
-        /* ───────────────  PUBLIC (no session)  ─────────────── */
+        /* ───────────── PUBLIC ───────────── */
         <Routes>
           <Route path="/login" element={<AuthPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />

@@ -1,17 +1,16 @@
+// src/components/PostCard.jsx
+
 import React, { useState, useEffect, useRef, useContext } from 'react';
 import { Link } from 'react-router-dom';
 import dayjs from 'dayjs';
 import customParseFormat from 'dayjs/plugin/customParseFormat';
 import AuthContext from '../AuthContext';
-
 import {
   FiMessageCircle,
   FiRepeat,
   FiChevronLeft,
   FiChevronRight,
   FiX,
-  FiChevronUp,
-  FiChevronDown,
   FiTrash2,
 } from 'react-icons/fi';
 import { AiOutlineHeart, AiFillHeart } from 'react-icons/ai';
@@ -22,14 +21,26 @@ import { api } from '../api';
 
 dayjs.extend(customParseFormat);
 
-
-export default function PostCard({ post, onLike, onSave, onShare, onReport, onCommentAdded, onDelete, isSharedPreview = false, sharer }) {
+export default function PostCard({
+  post,
+  onLike,
+  onSave,
+  onShare,
+  onReport,
+  onCommentAdded,
+  onDelete,
+  isSharedPreview = false,
+  sharer,
+  hideSaveButton = false,
+}) {
   const { user } = useContext(AuthContext);
 
   // === State ===
   const [liked, setLiked] = useState(Boolean(post.liked));
   const [likeCount, setLikeCount] = useState(Number(post.likeCount || 0));
   const [saved, setSaved] = useState(Boolean(post.saved));
+  const initialShared = post.shared ?? (post.type === 'share');
+  const [shared, setShared] = useState(initialShared);
   const [commentCount, setCommentCount] = useState(Number(post.commentCount || 0));
   const [shareCount, setShareCount] = useState(Number(post.shareCount || 0));
   const [commentsOpen, setCommentsOpen] = useState(false);
@@ -43,52 +54,60 @@ export default function PostCard({ post, onLike, onSave, onShare, onReport, onCo
   const [lightboxSrc, setLightboxSrc] = useState('');
   const bottomInputRef = useRef();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  // keep local `saved` in sync if parent flips it
-  useEffect(() => {
-    setSaved(Boolean(post.saved));
-  }, [post.saved]);
 
-  // load comments once
+  // Sync props → state
+  useEffect(() => setSaved(Boolean(post.saved)), [post.saved]);
+  useEffect(() => setLiked(Boolean(post.liked)), [post.liked]);
+  useEffect(() => {
+    setShared(post.shared ?? (post.type === 'share'));
+  }, [post.shared, post.type]);
+
+  // Load comments when panel opens
   useEffect(() => {
     if (commentsOpen && comments.length === 0) {
       api.get(`/comments/post/${post._id}`)
-        .then(res =>
-          setComments(res.data.map(c => ({
+        .then(res => {
+          const data = res.data || [];
+          setComments(data.map(c => ({
             ...c,
             liked: Boolean(c.liked),
             likeCount: Number(c.likeCount || 0),
-          })))
-        )
+          })));
+        })
         .catch(() => toast.error('Failed to load comments'));
     }
   }, [commentsOpen, comments.length, post._id]);
 
-  // fetch share count (skip preview)
+  // Fetch share count if not a shared-preview stub
   useEffect(() => {
-    if (isSharedPreview) return;
-    api.get(`/shares/${post._id}`)
-      .then(res => setShareCount(res.data.count))
-      .catch(() => { });
+    if (!isSharedPreview) {
+      api.get(`/shares/${post._id}`)
+        .then(res => setShareCount(res.data.count))
+        .catch(() => { });
+    }
   }, [post._id, isSharedPreview]);
 
-  // Share‐preview stub
+  // Render shared‐preview stub
   if (isSharedPreview && post.original && sharer) {
     return (
       <div className="max-w-screen-md mx-auto card bg-base-200 dark:bg-base-300 border border-base-content/10 shadow-md mb-6">
-        <div className="flex items-center p-3 border-b border-base-content/10 bg-base-100 dark:bg-base-200">
-          <Link to={`/profile/${sharer._id}`}>
-            <img
-              src={sharer.avatarUrl || '/default-avatar.png'}
-              alt=""
-              className="w-8 h-8 rounded-full object-cover mr-2"
-            />
-          </Link>
-          <Link to={`/profile/${sharer._id}`} className="font-semibold hover:underline mr-1">
+        <div className="flex items-center p-3 border-b border-base-content/10 bg-base-100 dark:bg-base-200 space-x-2">
+          <Link
+            to={`/profile/${sharer._id}`}
+            className="font-semibold text-white hover:text-gray-200"
+          >
             {sharer.firstName} {sharer.lastName}
           </Link>
-          <span className="text-sm text-base-content/60">shared</span>
+          <span className="mx-1">shared</span>
+          <Link
+            to={`/profile/${post.original.author._id}`}
+            className="font-semibold text-white hover:text-gray-200"
+          >
+            {post.original.author.firstName} {post.original.author.lastName}
+          </Link>
+          <span className="ml-1">{'\u2019'}s post</span>
         </div>
-        <div className="mx-3 p-2 border border-base-content/20 rounded-b-lg">
+        <div className="p-3">
           <PostCard
             post={post.original}
             onLike={onLike}
@@ -97,6 +116,7 @@ export default function PostCard({ post, onLike, onSave, onShare, onReport, onCo
             onReport={onReport}
             onCommentAdded={onCommentAdded}
             onDelete={onDelete}
+            hideSaveButton={true}
           />
         </div>
       </div>
@@ -107,18 +127,21 @@ export default function PostCard({ post, onLike, onSave, onShare, onReport, onCo
   const formatDate = raw => {
     let d = dayjs(raw, 'DD-MM-YYYY HH:mm:ss', true);
     if (!d.isValid()) d = dayjs(raw);
-    return d.isValid() ? d.format('MMM D, YYYY h:mm A') : 'Invalid date';
+    return d.isValid() ? d.format('MMM D, YYYY h:mm A') : '';
   };
+
   const MAX = 200;
   const isLong = text => (text || '').length > MAX;
   const showText = () => {
     const full = post.content || '';
     return expanded || !isLong(full) ? full : full.slice(0, MAX) + '…';
   };
+
   const media = [
     ...(post.imageUrls || []).map(u => ({ url: u, type: 'image' })),
-    ...(post.videoUrls || []).map(u => ({ url: u, type: 'video' }))
+    ...(post.videoUrls || []).map(u => ({ url: u, type: 'video' })),
   ];
+
   const getReplies = (all, parentId) =>
     all.filter(c => {
       let curr = c;
@@ -129,6 +152,7 @@ export default function PostCard({ post, onLike, onSave, onShare, onReport, onCo
       return false;
     });
 
+  // === Action handlers ===
   const handleLikeClick = async () => {
     const orig = liked;
     setLiked(!orig);
@@ -144,66 +168,64 @@ export default function PostCard({ post, onLike, onSave, onShare, onReport, onCo
     }
   };
 
-  // === handleSaveClick ===
   const handleSaveClick = async () => {
     try {
       if (saved) {
-        // unsave
         await api.delete(`/posts/${post._id}/save`);
         setSaved(false);
         onSave?.(post._id, false);
         toast.success('Removed save');
       } else {
-        // save
         await api.post(`/posts/${post._id}/save`);
         setSaved(true);
         onSave?.(post._id, true);
         toast.success('Saved post');
       }
     } catch (err) {
-      const code = err.response?.status;
       const msg = err.response?.data?.message;
-      // idempotent
-      if (code === 400 && msg === 'Already saved') {
+      if (msg === 'Already saved') {
         setSaved(true);
         onSave?.(post._id, true);
         toast.info('Already saved');
-      } else if (code === 404 && msg === 'Post not saved yet') {
-        setSaved(false);
-        onSave?.(post._id, false);
-        toast.info('Already unsaved');
       } else {
-        console.error('Save error:', err.response?.data || err.message);
         toast.error('Could not update save');
       }
     }
   };
-  const handleShareClick = async () => {
-    try {
-      await api.post(`/shares/${post._id}`);
-      onShare?.(post);
-      setShareCount(c => c + 1);
-    } catch (err) {
-      if (err.response?.status === 409) toast.info('Already shared.');
-      else toast.error('Failed to share.');
-    }
+
+  const handleShareClick = () => {
+    setShared(true);
+    setShareCount(c => c + 1);
+    onShare?.(post);
   };
 
   const handleReportClick = async () => {
     try {
       await api.post(`/posts/${post._id}/report`);
       toast.success('Reported');
-      onReport?.(post._id);
+      onReport?.();
     } catch {
       toast.error('Report failed');
     }
+  };
+
+  const toggleComments = () => setCommentsOpen(o => !o);
+
+  const handleReply = cid => {
+    setParentTo(cid);
+    setShowReplies(m => ({ ...m, [cid]: true }));
+    setTimeout(() => bottomInputRef.current?.focus(), 0);
   };
 
   const handleCommentLike = async cid => {
     setComments(cs =>
       cs.map(c =>
         c._id === cid
-          ? { ...c, liked: !c.liked, likeCount: c.liked ? c.likeCount - 1 : c.likeCount + 1 }
+          ? {
+            ...c,
+            liked: !c.liked,
+            likeCount: c.liked ? c.likeCount - 1 : c.likeCount + 1,
+          }
           : c
       )
     );
@@ -214,13 +236,6 @@ export default function PostCard({ post, onLike, onSave, onShare, onReport, onCo
     } catch {
       toast.error('Could not update comment like');
     }
-  };
-
-  const toggleComments = () => setCommentsOpen(o => !o);
-  const handleReply = cid => {
-    setParentTo(cid);
-    setShowReplies(m => ({ ...m, [cid]: true }));
-    setTimeout(() => bottomInputRef.current?.focus(), 0);
   };
 
   const handleCommentSubmit = async e => {
@@ -257,20 +272,23 @@ export default function PostCard({ post, onLike, onSave, onShare, onReport, onCo
     <div className="max-w-screen-md mx-auto mb-6 card bg-base-200 dark:bg-base-300 border border-base-content/10 shadow-md hover:shadow-lg relative">
       {showDeleteConfirm && (
         <div className="modal modal-open">
-          <div className="modal-box">
+          <div className="modal-box max-w-80">
             <h3 className="font-bold text-lg">Delete post?</h3>
-            <p>Are you sure?</p>
+            <p className="py-8">Are you sure?</p>
             <div className="modal-action">
               <button
                 onClick={() => {
                   onDelete?.(post._id);
                   setShowDeleteConfirm(false);
                 }}
-                className="btn btn-error"
+                className="btn"
               >
                 Yes
               </button>
-              <button onClick={() => setShowDeleteConfirm(false)} className="btn">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className="btn"
+              >
                 No
               </button>
             </div>
@@ -290,11 +308,13 @@ export default function PostCard({ post, onLike, onSave, onShare, onReport, onCo
         <div className="flex-1">
           <Link
             to={`/profile/${post.author._id}`}
-            className="font-semibold text-gray-800 dark:text-white hover:text-blue-600 dark:hover:text-primary transition"
+            className="font-semibold text-white hover:text-gray-200"
           >
             {post.author.firstName} {post.author.lastName}
           </Link>
-          <p className="text-xs text-base-content/60">{formatDate(post.createdAt)}</p>
+          <p className="text-xs text-base-content/60">
+            {formatDate(post.createdAt)}
+          </p>
         </div>
       </div>
 
@@ -311,13 +331,13 @@ export default function PostCard({ post, onLike, onSave, onShare, onReport, onCo
           ) : (
             <video
               src={media[carouselIdx].url}
-              className="w-full h-96 object-contain cursor-pointer"
+              className="w-full h-96 object-contain"
               controls
             />
           )}
           {carouselIdx > 0 && (
             <button
-              onClick={() => setCarouselIdx(i => Math.max(i - 1, 0))}
+              onClick={() => setCarouselIdx(i => i - 1)}
               className="icon-button absolute left-2 top-1/2 -translate-y-1/2 text-white shadow"
             >
               <FiChevronLeft size={24} />
@@ -325,7 +345,7 @@ export default function PostCard({ post, onLike, onSave, onShare, onReport, onCo
           )}
           {carouselIdx < media.length - 1 && (
             <button
-              onClick={() => setCarouselIdx(i => Math.min(i + 1, media.length - 1))}
+              onClick={() => setCarouselIdx(i => i + 1)}
               className="icon-button absolute right-2 top-1/2 -translate-y-1/2 text-white shadow"
             >
               <FiChevronRight size={24} />
@@ -354,15 +374,19 @@ export default function PostCard({ post, onLike, onSave, onShare, onReport, onCo
 
       {/* Actions */}
       <div className="flex items-center px-4 pb-3 space-x-6">
+        {/* Like */}
         <button
           onClick={handleLikeClick}
-          className={`icon-button flex items-center space-x-1 transition-colors ${liked ? 'text-red-500' : 'text-gray-600 dark:text-gray-300'
+          className={`icon-button flex items-center space-x-1 transition-colors ${liked
+            ? 'text-red-500'
+            : 'text-gray-600 dark:text-gray-300 hover:text-red-500'
             }`}
         >
           {liked ? <AiFillHeart size={20} /> : <AiOutlineHeart size={20} />}
           <span>{likeCount}</span>
         </button>
 
+        {/* Comment */}
         <button
           onClick={toggleComments}
           className="icon-button flex items-center space-x-1 text-gray-600 dark:text-gray-300 hover:text-primary transition-colors"
@@ -371,22 +395,32 @@ export default function PostCard({ post, onLike, onSave, onShare, onReport, onCo
           <span>{commentCount}</span>
         </button>
 
+        {/* Share */}
         <button
           onClick={handleShareClick}
-          className="icon-button flex items-center space-x-1 text-gray-600 dark:text-gray-300 hover:text-primary transition-colors"
+          className={`icon-button flex items-center space-x-1 transition-colors ${shared
+            ? 'text-green-500'
+            : 'text-gray-600 dark:text-gray-300 hover:text-green-500'
+            }`}
         >
           <FiRepeat size={20} />
           <span>{shareCount}</span>
         </button>
 
-        <button
-          onClick={handleSaveClick}
-          className={`icon-button flex items-center space-x-1 transition-colors ${saved ? 'text-yellow-400' : 'text-gray-600 dark:text-gray-300'
-            }`}
-        >
-          {saved ? <BsBookmarkFill size={20} /> : <BsBookmark size={20} />}
-        </button>
+        {/* Save */}
+        {!hideSaveButton && (
+          <button
+            onClick={handleSaveClick}
+            className={`icon-button flex items-center space-x-1 transition-colors ${saved
+              ? 'text-yellow-400'
+              : 'text-gray-600 dark:text-gray-300 hover:text-yellow-400'
+              }`}
+          >
+            {saved ? <BsBookmarkFill size={20} /> : <BsBookmark size={20} />}
+          </button>
+        )}
 
+        {/* Delete */}
         {user?.id === post.author._id && (
           <button
             onClick={() => setShowDeleteConfirm(true)}
@@ -396,6 +430,7 @@ export default function PostCard({ post, onLike, onSave, onShare, onReport, onCo
           </button>
         )}
 
+        {/* Report */}
         <button
           onClick={handleReportClick}
           className="icon-button ml-auto text-gray-600 dark:text-gray-300 hover:text-primary transition-colors"
@@ -473,8 +508,7 @@ export default function PostCard({ post, onLike, onSave, onShare, onReport, onCo
                               <FiChevronDown size={16} />
                             )}
                             <span>
-                              {showReplies[parent._id] ? 'Hide' : 'Show'} replies (
-                              {replies.length})
+                              {showReplies[parent._id] ? 'Hide' : 'Show'} replies ({replies.length})
                             </span>
                           </button>
                         )}
@@ -546,25 +580,22 @@ export default function PostCard({ post, onLike, onSave, onShare, onReport, onCo
               })}
           </div>
 
+          {/* Comment input */}
           <form onSubmit={handleCommentSubmit} className="flex items-center space-x-2 mt-2">
             <input
               ref={bottomInputRef}
               type="text"
               placeholder={
                 parentTo
-                  ? `Reply to ${comments.find(c => c._id === parentTo)?.author.firstName
-                  }…`
+                  ? `Reply to ${comments.find(c => c._id === parentTo)?.author.firstName}…`
                   : 'Write a comment…'
               }
               value={commentInput}
               onChange={e => setCommentInput(e.target.value)}
               className="input input-bordered flex-1"
             />
-            <button
-              type="submit"
-              className="icon-button text-gray-600 dark:text-gray-300 hover:text-primary transition-colors"
-            >
-              <FiChevronUp size={20} />
+            <button type="submit" className="icon-button text-gray-600 dark:text-gray-300 hover:text-primary transition-colors">
+              <FiX size={20} />
             </button>
           </form>
         </div>
