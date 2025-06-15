@@ -1,43 +1,56 @@
-// src/SocketProvider.jsx
+// // src/SocketProvider.jsx
+// import React, { useEffect, useContext, createContext, useState } from 'react';
+// import { io } from 'socket.io-client';
+// import AuthContext from './AuthContext';
 
-import React, { useEffect, useContext } from 'react';
-import { io } from 'socket.io-client';
-import { AuthContext } from './AuthContext';
+// const SOCKET_URL = import.meta.env.VITE_API_URL.replace(/\/api\/?$/, '');
 
-// If you’re using Vite and have VITE_API_URL in your .env:
-const SOCKET_URL = import.meta.env.VITE_API_URL.replace(/\/api\/?$/, '');
+// const SocketContext = createContext({
+//   socket: null,
+//   onlineUsers: {},
+// });
 
-export default function SocketProvider({ children }) {
-  const { user } = useContext(AuthContext);
-  const token = localStorage.getItem('token');
+// export function useSocket() {
+//   return useContext(SocketContext);
+// }
 
-  useEffect(() => {
-    // Only connect once we have a logged-in user and a token
-    if (!user || !token) return;
+// export default function SocketProvider({ children }) {
+//   const { user } = useContext(AuthContext);
+//   const [socket, setSocket] = useState(null);
+//   const [onlineUsers, setOnlineUsers] = useState({});
 
-    const socket = io(SOCKET_URL, {
-      auth: { token },
-      transports: ['websocket']
-    });
+//   useEffect(() => {
+//     // if not logged in, tear down any existing connection
+//     if (!user) {
+//       if (socket) socket.disconnect();
+//       setSocket(null);
+//       return;
+//     }
 
-    socket.on('connect', () => {
-      console.log('🔌 Socket connected, id=', socket.id);
-    });
+//     // establish new connection—cookies will be sent automatically
+//     const s = io(SOCKET_URL, {
+//       transports: ['websocket'],
+//       withCredentials: true,    // ← send HTTP-only cookie
+//     });
 
-    socket.on('presence', ({ userId, isOnline }) => {
-      console.log(`📶 User ${userId} is now ${isOnline ? 'online' : 'offline'}`);
-      // You could dispatch this to context or update your UI here
-    });
+//     s.on('connect', () => {
+//       console.log('🔌 Socket connected, id=', s.id);
+//     });
 
-    socket.on('disconnect', reason => {
-      console.log('🔌 Socket disconnected:', reason);
-    });
+//     s.on('presence', ({ userId, isOnline }) => {
+//       setOnlineUsers(prev => ({ ...prev, [userId]: isOnline }));
+//     });
 
-    // Clean up on unmount or user change
-    return () => {
-      socket.disconnect();
-    };
-  }, [user, token]);
+//     setSocket(s);
 
-  return <>{children}</>;
-}
+//     return () => {
+//       s.disconnect();
+//     };
+//   }, [user]);
+
+//   return (
+//     <SocketContext.Provider value={{ socket, onlineUsers }}>
+//       {children}
+//     </SocketContext.Provider>
+//   );
+// }

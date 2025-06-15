@@ -18,7 +18,8 @@ const authCookieOpt = {
   httpOnly: true,
   sameSite: 'lax',
   secure: process.env.NODE_ENV === 'production',
-  maxAge: 7 * 24 * 60 * 60 * 1000,                  // 7 days
+  maxAge: 7 * 24 * 60 * 60 * 1000,     // 7 days  
+  path: '/',
 };
 
 /* ─────────────────── SIGN-UP ─────────────────── */
@@ -305,27 +306,19 @@ router.post('/refresh-token', async (req, res) => {
 });
 
 /* ─────────── LOGOUT ─────────── */
-router.post('/logout', authMiddleware, async (req, res) => {
-  try {
-    const { refreshToken } = req.body || {};
+router.post('/logout', (req, res) => {
+  const clearOpt = {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    path: '/', // must match the path you used when setting the cookie
+  };
 
-    const clearOpt = {
-      httpOnly: true, sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
-      path: '/',
-    };
-    res.clearCookie('authToken', clearOpt);
+  // Clear the authToken cookie
+  res.clearCookie('authToken', clearOpt);
 
-    if (refreshToken) {
-      const user = await User.findById(req.user._id);
-      user.refreshTokens = user.refreshTokens.filter(rt => rt.token !== refreshToken);
-      await user.save();
-    }
-    res.sendStatus(204);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Server error during logout' });
-  }
+  // Done!
+  return res.sendStatus(200);
 });
 
 module.exports = router;

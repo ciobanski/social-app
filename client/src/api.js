@@ -2,17 +2,28 @@
 import axios from 'axios';
 
 export const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL, // e.g. http://localhost:5000/api
+  baseURL: '/api',        // ← use the Vite proxy
   withCredentials: true,
 });
 
-// ONLY attach the JWT from localStorage (no refresh‐token calls)
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+// 1️⃣ swallow only the /auth/me 401
+api.interceptors.response.use(
+  res => res,
+  err => {
+    if (
+      err.response?.status === 401 &&
+      err.config.url?.endsWith('/auth/me')
+    ) {
+      // pretend it resolved to { user: null }
+      return Promise.resolve({ data: { user: null } });
+    }
+    return Promise.reject(err);
   }
+);
+
+// 2️⃣ then your old request‐token interceptor
+api.interceptors.request.use(config => {
+  const token = localStorage.getItem('authToken');
+  if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
-}, (error) => {
-  return Promise.reject(error);
 });

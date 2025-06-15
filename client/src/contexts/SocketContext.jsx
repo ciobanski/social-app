@@ -1,48 +1,68 @@
 // src/contexts/SocketContext.jsx
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+} from 'react';
 import { io } from 'socket.io-client';
+import AuthContext from '../AuthContext';  // ← pull in your AuthContext
 
-const SocketContext = createContext();
-export const useSocket = () => useContext(SocketContext);
+// strip off the `/api` from your VITE_API_URL to get the socket endpoint
+const SOCKET_URL = import.meta.env.VITE_API_URL.replace(/\/api\/?$/, '');
 
-export default function SocketProvider({ children, token }) {
+const SocketContext = createContext({
+  socket: null,
+  onlineUsers: {},
+});
+
+export function SocketProvider({ children }) {
+  const { user } = useContext(AuthContext);
   const [socket, setSocket] = useState(null);
   const [onlineUsers, setOnlineUsers] = useState({});
 
   useEffect(() => {
-    if (!token) return;
+    // only connect once we have a logged-in user
+    if (!user) return;
 
-    const socketInstance = io(
-      import.meta.env.VITE_API_URL.replace(/\/api\/?$/, ''),
-      {
-        auth: { token },
-        transports: ['websocket'],
-        reconnectionAttempts: 5,
-        reconnectionDelay: 1000,
-      }
-    );
+    // if you’re using JWTs in localStorage, grab it here:
+    const token = localStorage.getItem('authToken');
 
-    socketInstance.on('connect', () =>
-      console.log('🔌 Socket connected', socketInstance.id)
-    );
+    const s = io(SOCKET_URL, {
+      auth: token ? { token } : undefined,
+      transports: ['websocket'],
+      withCredentials: true,   // send cookies too, if you rely on them
+    });
+    setSocket(s);
 
-    socketInstance.on('presence', ({ userId, isOnline }) => {
+    s.on('connect', () => {
+      console.log('🔌 Socket connected, id=', s.id);
+    });
+
+    s.on('presence', ({ userId, isOnline }) => {
       setOnlineUsers(prev => ({ ...prev, [userId]: isOnline }));
     });
 
-    socketInstance.on('disconnect', reason =>
-      console.log('🔌 Socket disconnected:', reason)
-    );
+    s.on('disconnect', reason => {
+      console.log('🔌 Socket disconnected:', reason);
+      setSocket(null);
+      setOnlineUsers({});
+    });
 
-    setSocket(socketInstance);
     return () => {
-      socketInstance.disconnect();
+      s.disconnect();
+      setSocket(null);
+      setOnlineUsers({});
     };
-  }, [token]);
+  }, [user]);
 
   return (
     <SocketContext.Provider value={{ socket, onlineUsers }}>
       {children}
     </SocketContext.Provider>
   );
+}
+
+export function useSocket() {
+  return useContext(SocketContext);
 }

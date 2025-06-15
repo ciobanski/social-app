@@ -1,5 +1,4 @@
 // src/components/NotificationBell.jsx
-
 import React, { useContext, useEffect, useState, useRef } from 'react';
 import { FiBell } from 'react-icons/fi';
 import { toast } from 'react-toastify';
@@ -13,24 +12,26 @@ export default function NotificationBell() {
   const [open, setOpen] = useState(false);
   const ref = useRef();
 
-  // 1) Load all notifications when the user logs in
+  // Load all notifications when the user logs in
   useEffect(() => {
     if (!user) return;
     api.get('/notifications')
       .then(res => setNotes(res.data.notifications || []))
-      .catch(console.error);
+      .catch(err => {
+        console.error('Could not fetch notifications:', err);
+        toast.error('Failed to load notifications');
+      });
   }, [user]);
 
-  // 2) When dropdown opens, mark everything read locally
+  // Mark all as read locally when dropdown opens
   useEffect(() => {
     if (open) {
       setNotes(ns => ns.map(n => ({ ...n, read: true })));
-      // Optional: persist this to server
-      // api.patch('/notifications/mark-all-read').catch(console.error);
+      // optional: api.patch('/notifications/mark-all-read').catch(console.error);
     }
   }, [open]);
 
-  // 3) Close dropdown on outside click
+  // Close dropdown on outside click
   useEffect(() => {
     const handleClick = e => {
       if (ref.current && !ref.current.contains(e.target)) {
@@ -40,28 +41,6 @@ export default function NotificationBell() {
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
-
-  // Handlers for friend-requests
-  const handleAccept = async note => {
-    try {
-      await api.post(`/friends/accept/${note.from._id}`);
-      setNotes(ns => ns.filter(n => n._id !== note._id));
-      toast.success('Friend request accepted');
-    } catch (err) {
-      console.error(err);
-      toast.error('Could not accept request');
-    }
-  };
-  const handleReject = async note => {
-    try {
-      await api.post(`/friends/reject/${note.from._id}`);
-      setNotes(ns => ns.filter(n => n._id !== note._id));
-      toast.success('Friend request rejected');
-    } catch (err) {
-      console.error(err);
-      toast.error('Could not reject request');
-    }
-  };
 
   const unreadCount = notes.filter(n => !n.read).length;
 
@@ -94,17 +73,20 @@ export default function NotificationBell() {
               (no notifications)
             </p>
           ) : (
-            <div className="divide-y divide-base-content/10">
+            /*  ← cap height here and make scrollable ↓ */
+            <div className="max-h-[60vh] overflow-y-auto divide-y divide-base-content/10">
               {notes.map(note => {
-                const { _id, type, from, entity } = note;
-                const avatar = from.avatarUrl || defaultAvatar;
-                const name = `${from.firstName} ${from.lastName}`;
+                const actor = note.entity?.from;
+                const avatar = actor?.avatarUrl || defaultAvatar;
+                const name = actor
+                  ? `${actor.firstName} ${actor.lastName}`
+                  : 'Someone';
 
-                switch (type) {
+                switch (note.type) {
                   case 'friend_request':
                     return (
                       <div
-                        key={_id}
+                        key={note._id}
                         className="flex items-center justify-between p-3 hover:bg-base-content/5 transition-colors"
                       >
                         <div className="flex items-center space-x-2">
@@ -119,14 +101,32 @@ export default function NotificationBell() {
                         </div>
                         <div className="flex items-center space-x-1">
                           <button
-                            onClick={() => handleAccept(note)}
+                            onClick={() =>
+                              api.post(`/friends/accept/${actor._id}`)
+                                .then(() =>
+                                  setNotes(ns =>
+                                    ns.filter(n => n._id !== note._id)
+                                  )
+                                )
+                                .then(() => toast.success('Friend request accepted'))
+                                .catch(() => toast.error('Could not accept request'))
+                            }
                             className="btn btn-xs btn-circle btn-success"
                             title="Accept"
                           >
                             ✓
                           </button>
                           <button
-                            onClick={() => handleReject(note)}
+                            onClick={() =>
+                              api.post(`/friends/reject/${actor._id}`)
+                                .then(() =>
+                                  setNotes(ns =>
+                                    ns.filter(n => n._id !== note._id)
+                                  )
+                                )
+                                .then(() => toast.success('Friend request rejected'))
+                                .catch(() => toast.error('Could not reject request'))
+                            }
                             className="btn btn-xs btn-circle btn-error"
                             title="Reject"
                           >
@@ -139,7 +139,7 @@ export default function NotificationBell() {
                   case 'friend_accept':
                     return (
                       <div
-                        key={_id}
+                        key={note._id}
                         className="flex items-center p-3 hover:bg-base-content/5 transition-colors"
                       >
                         <img
@@ -156,7 +156,7 @@ export default function NotificationBell() {
                   case 'like':
                     return (
                       <div
-                        key={_id}
+                        key={note._id}
                         className="flex items-center p-3 hover:bg-base-content/5 transition-colors"
                       >
                         <img
@@ -173,7 +173,7 @@ export default function NotificationBell() {
                   case 'comment':
                     return (
                       <div
-                        key={_id}
+                        key={note._id}
                         className="flex items-center p-3 hover:bg-base-content/5 transition-colors"
                       >
                         <img
@@ -182,7 +182,7 @@ export default function NotificationBell() {
                           className="w-8 h-8 rounded-full object-cover mr-3"
                         />
                         <span className="text-base-content">
-                          {name} commented: “{entity.commentText}”
+                          {name} commented on your post
                         </span>
                       </div>
                     );
@@ -190,7 +190,7 @@ export default function NotificationBell() {
                   case 'share':
                     return (
                       <div
-                        key={_id}
+                        key={note._id}
                         className="flex items-center p-3 hover:bg-base-content/5 transition-colors"
                       >
                         <img
@@ -203,8 +203,6 @@ export default function NotificationBell() {
                         </span>
                       </div>
                     );
-
-                  // future: case 'mention': …
 
                   default:
                     return null;

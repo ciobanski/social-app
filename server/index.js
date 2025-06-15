@@ -1,24 +1,24 @@
-// index.js  (or your entry-point file)
+// index.js
 
 require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const mongoose = require('mongoose');
 const cors = require('cors');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
 const passport = require('passport');
 const cookieParser = require('cookie-parser');
-require('./config/passport'); // Google OAuth setup
+const jwt = require('jsonwebtoken');
+
+// Passport config (Google OAuth, etc)
+require('./config/passport');
 
 // Models
 const User = require('./models/User');
 const Message = require('./models/Message');
 
-// Routes
+// API routes
 const authRoutes = require('./routes/auth');
 const postRoutes = require('./routes/posts');
-const trendingRoutes = require('./routes/trending');
 const commentRoutes = require('./routes/comments');
 const reportRoutes = require('./routes/reports');
 const adminRoutes = require('./routes/admin');
@@ -29,6 +29,7 @@ const hashtagRoutes = require('./routes/hashtags');
 const messageRoutes = require('./routes/messages');
 const shareRoutes = require('./routes/shares');
 const searchRoutes = require('./routes/search');
+const trendingRoutes = require('./routes/trending');
 const storiesRoutes = require('./routes/stories');
 const friendsRoutes = require('./routes/friends');
 const presenceRoutes = require('./routes/presence');
@@ -39,91 +40,65 @@ const server = http.createServer(app);
 const { Server } = require('socket.io');
 const io = new Server(server, { cors: { origin: '*' } });
 
-// Expose io and presence set to routes if needed
+// Share io & online-users set with routes if needed
 app.set('io', io);
 const onlineUsers = new Set();
 app.set('onlineUsers', onlineUsers);
 
-// ── Global Middleware ─────────────────────────────────────────
-// Allow any http://localhost:<port> origin
+// ── MIDDLEWARE ──────────────────────────────────────────────────
+
+// CORS + cookies
 const localhostRegex = /^http:\/\/localhost:\d+$/;
-
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      // Allow requests with no origin (mobile apps, curl, postman)
-      if (!origin) return callback(null, true);
-
-      if (localhostRegex.test(origin)) {
-        return callback(null, true);
-      }
-      callback(new Error('Not allowed by CORS'));
-    },
-    credentials: true
-  })
-);
-
+app.use(cors({
+  origin: (origin, cb) => {
+    if (!origin || localhostRegex.test(origin)) return cb(null, true);
+    cb(new Error('Not allowed by CORS'));
+  },
+  credentials: true
+}));
 app.use(express.json());
 app.use(cookieParser());
 app.use(passport.initialize());
 
-// ── Admin Seeding ───────────────────────────────────────────────
+// ── ADMIN SEEDING ────────────────────────────────────────────────
 async function ensureAdminUser() {
   const { ADMIN_NAME, ADMIN_EMAIL, ADMIN_PASSWORD } = process.env;
   if (!ADMIN_EMAIL || !ADMIN_PASSWORD) return;
 
-  // Split ADMIN_NAME into firstName / lastName, with a default lastName
   const parts = (ADMIN_NAME || 'Admin').trim().split(/\s+/);
   const firstName = parts[0];
-  const lastName = parts.length > 1 ? parts.slice(1).join(' ') : 'Administrator';
-
+  const lastName = parts.slice(1).join(' ') || 'Administrator';
   const bcrypt = require('bcryptjs');
   const passwordHash = await bcrypt.hash(ADMIN_PASSWORD, 12);
 
-  const existing = await User.findOne({ email: ADMIN_EMAIL });
-  if (existing) {
-    // Patch missing name fields and update password & flags
-    existing.firstName = firstName;
-    existing.lastName = lastName;
-    existing.passwordHash = passwordHash;
-    existing.isVerified = true;
-    existing.role = 'admin';
-    await existing.save();
-    console.log(`🔐 Admin user updated: ${existing.email}`);
-    return;
+  let admin = await User.findOne({ email: ADMIN_EMAIL });
+  if (admin) {
+    Object.assign(admin, { firstName, lastName, passwordHash, isVerified: true, role: 'admin' });
+    await admin.save();
+    console.log(`🔐 Admin updated: ${admin.email}`);
+  } else {
+    admin = await User.create({ firstName, lastName, email: ADMIN_EMAIL, passwordHash, isVerified: true, role: 'admin' });
+    console.log(`🔐 Admin created: ${admin.email}`);
   }
-
-  // Create a brand-new, fully populated admin user
-  const admin = await User.create({
-    firstName,
-    lastName,
-    email: ADMIN_EMAIL,
-    passwordHash,
-    role: 'admin',
-    isVerified: true
-  });
-  console.log(`🔐 Admin user created: ${admin.email}`);
 }
 
-
-// ── Database Connection ─────────────────────────────────────────
-mongoose
-  .connect(process.env.MONGO_URI)
+// ── DB CONNECTION ────────────────────────────────────────────────
+mongoose.connect(process.env.MONGO_URI)
   .then(async () => {
     console.log('✅ MongoDB connected');
     await ensureAdminUser();
   })
-  .catch(err => console.error('❌ MongoDB connection error:', err));
+  .catch(err => console.error('❌ MongoDB error:', err));
 
-// ── REST Route Mounting ─────────────────────────────────────────
+// ── REST ROUTES ─────────────────────────────────────────────────
 app.use('/api/auth', authRoutes);
 app.use('/api/posts', postRoutes);
 app.use('/api/comments', commentRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/users', userRoutes);
-app.use('/api', likeRoutes);
-app.use('/api', saveRoutes);
+app.use('/api', likeRoutes);       // e.g. POST /api/posts/:id/like
+app.use('/api', saveRoutes);       // e.g. POST /api/posts/:id/save
 app.use('/api/hashtags', hashtagRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/shares', shareRoutes);
@@ -133,12 +108,14 @@ app.use('/api/stories', storiesRoutes);
 app.use('/api/friends', friendsRoutes);
 app.use('/api/presence', presenceRoutes);
 app.use('/api/notifications', notificationsRoutes);
-// ── Health Check ───────────────────────────────────────────────
-app.get('/', (req, res) => res.send('API is up and running!'));
 
-// ── Socket.io Authentication ───────────────────────────────────
+// Health check
+app.get('/', (req, res) => res.send('API is running'));
+
+// ── SOCKET.IO ───────────────────────────────────────────────────
+// Authenticate handshake via JWT stored in authToken cookie or passed in auth
 io.use((socket, next) => {
-  const token = socket.handshake.auth?.token;
+  const token = socket.handshake.auth.token || socket.handshake.headers.cookie?.match(/authToken=([^;]+)/)?.[1];
   if (!token) return next(new Error('Auth token missing'));
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
@@ -149,33 +126,40 @@ io.use((socket, next) => {
   }
 });
 
-// ── Socket.io Connection & Presence Events ──────────────────────
 io.on('connection', async socket => {
   const uid = socket.userId;
   onlineUsers.add(uid);
   socket.join(uid);
 
-  // Notify friends that this user is online
+  // broadcast presence to your friends list
   const me = await User.findById(uid, 'friends').lean();
-  for (let fid of me.friends) {
+  me.friends.forEach(fid => {
     io.to(fid.toString()).emit('presence', { userId: uid, isOnline: true });
-  }
+  });
 
-  socket.on('disconnect', async () => {
-    onlineUsers.delete(uid);
-    // Update lastSeen for this user
-    await User.findByIdAndUpdate(uid, { lastSeen: new Date() });
-    // Notify friends that this user is offline
-    for (let fid of me.friends) {
-      io.to(fid.toString()).emit('presence', { userId: uid, isOnline: false });
+  // DM receive/save/broadcast
+  socket.on('dm', async ({ to, content }) => {
+    try {
+      const msg = await Message.create({ from: uid, to, content });
+      await msg.populate('from', 'firstName lastName avatarUrl');
+      socket.emit('dm', msg);        // echo to sender
+      io.to(to).emit('dm', msg);     // send to recipient
+    } catch (err) {
+      console.error('🛑 DM error:', err);
     }
   });
 
-  // your existing DM, notification events...
+  socket.on('disconnect', async () => {
+    onlineUsers.delete(uid);
+    await User.findByIdAndUpdate(uid, { lastSeen: new Date() });
+    me.friends.forEach(fid => {
+      io.to(fid.toString()).emit('presence', { userId: uid, isOnline: false });
+    });
+  });
 });
 
-// ── Server Startup ──────────────────────────────────────────────
+// ── START SERVER ────────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
-  console.log(`🚀 Server listening on port ${PORT}`);
+  console.log(`🚀 Listening on port ${PORT}`);
 });

@@ -101,8 +101,10 @@ export default function AuthPage() {
 
       {/* left split text (desktop only) */}
       <div className="hidden lg:flex w-1/2 items-center justify-end lg:pr-8">
-        <h2 className="max-w-lg break-words text-right text-7xl font-extrabold leading-tight text-white">
-          Fuckleyewt on ma jikkalyang snoopsnapp
+
+        <h2 className="max-w-lg break-words text-right text-7xl font-black leading-tight text-white">
+
+          Connecting people
         </h2>
       </div>
 

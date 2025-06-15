@@ -30,7 +30,7 @@ export default function Header() {
   return (
     <header className="fixed top-0 left-0 w-full h-16 bg-base-100 shadow-md flex items-center px-4 z-50">
       <RouterLink to="/" className="text-2xl font-bold text-primary">
-        Echo
+        <img className="max-w-56" src='../logo.svg' alt='Echo'></img>
       </RouterLink>
 
       {/* Search */}

@@ -15,81 +15,88 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
 
-  /* ───── helper: set / clear legacy header token (Google or old flow) ───── */
-  const setToken = (token) => {
+  // Helper to set/clear legacy header token (Google or old flow)
+  const setToken = token => {
     if (token) {
       localStorage.setItem('authToken', token);
       api.defaults.headers.common.Authorization = `Bearer ${token}`;
     } else {
       localStorage.removeItem('authToken');
-      localStorage.removeItem('token');      // hydrate old key just in case
       delete api.defaults.headers.common.Authorization;
     }
   };
 
-  /* ───── on mount: attach stored header (if any) & ping /auth/me ───── */
+  // On mount: rehydrate token & ping /auth/me
   useEffect(() => {
-    (async () => {
-      const stored = localStorage.getItem('authToken');
-      if (stored) api.defaults.headers.common.Authorization = `Bearer ${stored}`;
+    const stored = localStorage.getItem('authToken');
+    if (stored) {
+      api.defaults.headers.common.Authorization = `Bearer ${stored}`;
+    }
 
-      try {
-        const { data } = await api.get('/auth/me', { withCredentials: true });
-        setUser(data.user);                      // cookie or header valid
-      } catch (err) {
-        if (err.response?.status !== 401) console.error('Auth check failed:', err);
+    api
+      .get('/auth/me', { withCredentials: true })
+      .then(({ data }) => {
+        setUser(data.user);
+      })
+      .catch(() => {
+        // no valid session
         setToken(null);
         setUser(null);
-      } finally {
+      })
+      .finally(() => {
         setAuthLoading(false);
-      }
-    })();
+      });
   }, []);
 
-  /* ───── LOGIN ───── */
+  // LOGIN
   const login = async (email, password) => {
     try {
-      const { data } = await api.post('/auth/login', { email, password }, { withCredentials: true });
+      const { data } = await api.post(
+        '/auth/login',
+        { email, password },
+        { withCredentials: true }
+      );
 
-      /* 1️⃣  Two-factor challenge */
+      // 1️⃣ Two-factor challenge
       if (data.require2fa) {
         return { success: false, need2fa: true, userId: data.userId };
       }
 
-      /* 2️⃣  Normal cookie-only success (preferred) */
+      // 2️⃣ Cookie-only success
       if (data.user && !data.token) {
-        setUser(data.user);                      // JWT already in http-only cookie
+        setUser(data.user);
         return { success: true };
       }
 
-      /* 3️⃣  Legacy / Google flow with header token */
+      // 3️⃣ Legacy / Google flow with header token
       if (data.token && data.user) {
         setToken(data.token);
         setUser(data.user);
         return { success: true };
       }
 
-      /* Unexpected shape */
       return { success: false, message: 'Unexpected response from server.' };
-    } catch (err) {
+    } catch (error) {
       return {
         success: false,
-        message: err.response?.data?.message || 'Login failed.',
+        message: error.response?.data?.message || 'Login failed.',
       };
     }
   };
 
-  /* ───── LOGOUT ───── */
+  // LOGOUT
   const logout = async () => {
     try {
       await api.post('/auth/logout', {}, { withCredentials: true });
-    } catch (err) {
-      console.error('Logout error:', err);
+    } catch (error) {
+      console.error('Logout error:', error);
     } finally {
       setToken(null);
       setUser(null);
     }
   };
+
+  // Manual refresh if you need it
   const refreshUser = async () => {
     try {
       const { data } = await api.get('/auth/me', { withCredentials: true });
@@ -98,8 +105,11 @@ export function AuthProvider({ children }) {
       setUser(null);
     }
   };
+
   return (
-    <AuthContext.Provider value={{ user, authLoading, login, logout, refreshUser }}>
+    <AuthContext.Provider
+      value={{ user, authLoading, login, logout, refreshUser }}
+    >
       {children}
     </AuthContext.Provider>
   );

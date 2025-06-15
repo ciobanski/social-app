@@ -4,14 +4,19 @@ const { applyTZTransform } = require('./Utils');
 
 const postSchema = new mongoose.Schema(
   {
-    author: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    author: {
+      type: mongoose.Schema.Types.ObjectId,  // ← fix here
+      ref: 'User',
+      required: true
+    },
+
     content: {
       type: String,
       trim: true,
       maxlength: 2000,
     },
-    imageUrls: { type: [String], default: [] }, // array of Cloudinary URLs
-    videoUrls: { type: [String], default: [] }, // array of Cloudinary URLs for videos
+    imageUrls: { type: [String], default: [] },
+    videoUrls: { type: [String], default: [] },
     hashtags: { type: [String], default: [] },
     visibility: {
       type: String,
@@ -22,7 +27,6 @@ const postSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Preserve existing timezone transform
 applyTZTransform(postSchema);
 
 module.exports = mongoose.model('Post', postSchema);

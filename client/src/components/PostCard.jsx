@@ -10,6 +10,8 @@ import {
   FiRepeat,
   FiChevronLeft,
   FiChevronRight,
+  FiChevronDown,
+  FiChevronUp,
   FiX,
   FiTrash2,
 } from 'react-icons/fi';
@@ -595,7 +597,7 @@ export default function PostCard({
               className="input input-bordered flex-1"
             />
             <button type="submit" className="icon-button text-gray-600 dark:text-gray-300 hover:text-primary transition-colors">
-              <FiX size={20} />
+              <FiChevronRight size={20} />
             </button>
           </form>
         </div>
