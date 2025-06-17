@@ -7,17 +7,13 @@ export const api = axios.create({
     : '/api',
   withCredentials: true
 });
-
-// 1️⃣ swallow only the /auth/me 401
+// response interceptor to ignore 401s
 api.interceptors.response.use(
-  res => res,
+  r => r,
   err => {
-    if (
-      err.response?.status === 401 &&
-      err.config.url?.endsWith('/auth/me')
-    ) {
-      // pretend it resolved to { user: null }
-      return Promise.resolve({ data: { user: null } });
+    if (err.response?.status === 401) {
+      // we know this just means “no token / logged out” – swallow it
+      return Promise.resolve({ data: null });
     }
     return Promise.reject(err);
   }

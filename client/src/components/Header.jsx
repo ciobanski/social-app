@@ -20,7 +20,7 @@ import logoblack from '../assets/logoblack.svg';
 import defaultAvatar from '../assets/default-avatar.png';
 
 export default function Header() {
-  const { user, logout } = useContext(AuthContext);
+  const { user, logout, authLoading } = useContext(AuthContext);
   const navigate = useNavigate();
 
   // ── Theme toggle ───────────────────────────────────────────────────────
@@ -46,6 +46,7 @@ export default function Header() {
     }
     const id = setTimeout(async () => {
       try {
+        if (authLoading || !user) return;
         const { data } = await api.get('/search/suggestions', { params: { q: searchTerm } });
         setSuggestions(data.users || []);
         setShowSuggestions((data.users || []).length > 0);
@@ -54,7 +55,7 @@ export default function Header() {
       }
     }, 200);
     return () => clearTimeout(id);
-  }, [searchTerm]);
+  }, [searchTerm, user, authLoading]);
 
   // hide on outside click
   useEffect(() => {

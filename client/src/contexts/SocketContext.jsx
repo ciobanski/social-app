@@ -1,14 +1,9 @@
 // src/contexts/SocketContext.jsx
-import React, {
-  createContext,
-  useContext,
-  useEffect,
-  useState,
-} from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
-import AuthContext from '../AuthContext';  // ← pull in your AuthContext
+import AuthContext from '../AuthContext';
 
-// strip off the `/api` from your VITE_API_URL to get the socket endpoint
+// Strip off any trailing `/api` so we hit the bare socket endpoint
 const SOCKET_URL = import.meta.env.VITE_API_URL.replace(/\/api\/?$/, '');
 
 const SocketContext = createContext({
@@ -22,37 +17,40 @@ export function SocketProvider({ children }) {
   const [onlineUsers, setOnlineUsers] = useState({});
 
   useEffect(() => {
-    // only connect once we have a logged-in user
-    if (!user) return;
+    let s;
 
-    // if you’re using JWTs in localStorage, grab it here:
-    const token = localStorage.getItem('authToken');
+    if (user) {
+      // Grab JWT if you use one for socket auth
+      const token = localStorage.getItem('authToken');
 
-    const s = io(SOCKET_URL, {
-      auth: token ? { token } : undefined,
-      transports: ['websocket'],
-      withCredentials: true,   // send cookies too, if you rely on them
-    });
-    setSocket(s);
+      s = io(SOCKET_URL, {
+        autoConnect: false,
+        transports: ['websocket'],
+        withCredentials: true,
+        auth: token ? { token } : undefined,
+      });
 
-    s.on('connect', () => {
-      console.log('🔌 Socket connected, id=', s.id);
-    });
+      // presence/update handlers, etc.
+      s.on('connect', () => console.log('🔌 Socket connected:', s.id));
+      s.on('presence', ({ userId, isOnline }) => {
+        setOnlineUsers(prev => ({ ...prev, [userId]: isOnline }));
+      });
+      s.on('disconnect', reason => {
+        console.log('🔌 Socket disconnected:', reason);
+      });
 
-    s.on('presence', ({ userId, isOnline }) => {
-      setOnlineUsers(prev => ({ ...prev, [userId]: isOnline }));
-    });
+      // finally open it
+      s.connect();
+      setSocket(s);
+    }
 
-    s.on('disconnect', reason => {
-      console.log('🔌 Socket disconnected:', reason);
-      setSocket(null);
-      setOnlineUsers({});
-    });
-
+    // cleanup on unmount or when `user` changes (e.g. logout)
     return () => {
-      s.disconnect();
-      setSocket(null);
-      setOnlineUsers({});
+      if (s) {
+        s.disconnect();
+        setSocket(null);
+        setOnlineUsers({});
+      }
     };
   }, [user]);
 

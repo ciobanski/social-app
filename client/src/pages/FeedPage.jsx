@@ -32,7 +32,7 @@ export default function FeedPage() {
 
   // ─── 1) Load friend‐IDs once ────────────────────────────────
   useEffect(() => {
-    if (!user) return;
+    if (authLoading || !user) return;
     api.get('/friends')
       .then(res => {
         setFriends(
@@ -40,7 +40,7 @@ export default function FeedPage() {
         );
       })
       .catch(() => toast.error('Could not load friends list'));
-  }, [user]);
+  }, [user, authLoading]);
 
   // ─── Helper: shuffle an array in‐place (Fisher–Yates) ───────
   const shuffleArray = arr => {
@@ -71,7 +71,7 @@ export default function FeedPage() {
     setLoading(true);
     try {
       const pageSize = 25;
-      if (!user) return;
+      if (authLoading || !user) return;
       const { data: batch } = await api.get('/posts', {
         params: { offset, limit: pageSize }
       });
@@ -131,7 +131,7 @@ export default function FeedPage() {
 
   // ─── 4) Infinite‐scroll sentinel ───────────────────────────
   useEffect(() => {
-    if (!sentinelRef.current) return;
+    if (!sentinelRef.current || !user) return;
     const obs = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting && !loading && hasMore) {
@@ -142,11 +142,11 @@ export default function FeedPage() {
     );
     obs.observe(sentinelRef.current);
     return () => obs.disconnect();
-  }, [loading, hasMore]);
+  }, [loading, hasMore, user]);
 
   // ─── 5) Refresh “saved” flags whenever posts change ─────────
   useEffect(() => {
-    if (!user) return;
+    if (authLoading || !user) return;
     api.get('/users/me/saves')
       .then(res => {
         const savedIds = new Set(res.data.map(p => p._id));
@@ -161,7 +161,7 @@ export default function FeedPage() {
       .catch(() => {
         /* silently ignore */
       });
-  }, [posts]);
+  }, [posts, user, authLoading]);
 
   // ─── 6) Keep share‐flags in sync ───────────────────────────
   useEffect(() => {

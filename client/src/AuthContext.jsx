@@ -30,22 +30,28 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     const stored = localStorage.getItem('authToken');
     if (stored) {
+      // rehydrate header token
       api.defaults.headers.common.Authorization = `Bearer ${stored}`;
+      // only now do we check /auth/me
+      api
+        .get('/auth/me', { withCredentials: true })
+        .then(({ data }) => {
+          setUser(data.user);
+        })
+        .catch(err => {
+          // if 401, we simply drop to logged‐out state
+          if (err.response?.status !== 401) console.error(err);
+          setToken(null);
+          setUser(null);
+        })
+        .finally(() => {
+          setAuthLoading(false);
+        });
+    } else {
+      // no stored token → don’t even hit /auth/me
+      setUser(null);
+      setAuthLoading(false);
     }
-
-    api
-      .get('/auth/me', { withCredentials: true })
-      .then(({ data }) => {
-        setUser(data.user);
-      })
-      .catch(() => {
-        // no valid session
-        setToken(null);
-        setUser(null);
-      })
-      .finally(() => {
-        setAuthLoading(false);
-      });
   }, []);
 
   // LOGIN
@@ -86,19 +92,21 @@ export function AuthProvider({ children }) {
 
   // LOGOUT
   const logout = async () => {
+    // 1) clear everything local instantly
+    setToken(null);
+    setUser(null);
+    // 2) then tell the server (if it still has a cookie)
     try {
       await api.post('/auth/logout', {}, { withCredentials: true });
     } catch (error) {
       console.error('Logout error:', error);
-    } finally {
-      setToken(null);
-      setUser(null);
     }
   };
 
   // Manual refresh if you need it
   const refreshUser = async () => {
     try {
+
       const { data } = await api.get('/auth/me', { withCredentials: true });
       setUser(data.user);
     } catch {

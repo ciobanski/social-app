@@ -18,7 +18,7 @@ dayjs.extend(customParseFormat);
 
 export default function ProfilePage() {
   const { id } = useParams();
-  const { user: me, reload: reloadMe } = useContext(AuthContext);
+  const { user: me, reload: reloadMe, authLoading } = useContext(AuthContext);
 
   const [showScroll, setShowScroll] = useState(false);
   const [profile, setProfile] = useState(null);
@@ -42,6 +42,7 @@ export default function ProfilePage() {
   // ─── Load profile info ──────────────────────────────────────
   useEffect(() => {
     setLoadingProfile(true);
+    if (authLoading || !me) return;
     api.get(`/users/${id}`)
       .then(res => setProfile(res.data))
       .catch(err => {
@@ -49,13 +50,14 @@ export default function ProfilePage() {
         toast.error(err.response?.status === 404 ? 'User not found' : 'Could not load profile');
       })
       .finally(() => setLoadingProfile(false));
-  }, [id]);
+  }, [id, me, authLoading]);
 
   // ─── Load **both** posts & shares in one go ─────────────────
   useEffect(() => {
     async function loadPostsAndShares() {
       setLoadingPosts(true);
       try {
+        if (authLoading || !me) return;
         // fetch the unified feed (server already merged & sorted)
         const { data: feed } = await api.get('/posts', { params: { limit: 1000 } });
         // keep only items authored or shared by this profile
@@ -72,11 +74,12 @@ export default function ProfilePage() {
       }
     }
     if (me) loadPostsAndShares();
-  }, [id, me]);
+  }, [id, me, authLoading]);
 
   // ─── Refresh “saved” flags ───────────────────────────────────
   useEffect(() => {
     let isMounted = true;
+    if (authLoading || !me) return;
     api.get('/users/me/saves')
       .then(res => {
         if (!isMounted) return;
@@ -90,7 +93,7 @@ export default function ProfilePage() {
       })
       .catch(console.error);
     return () => { isMounted = false; };
-  }, [posts]);
+  }, [posts, me, authLoading]);
 
   // ─── Friendship actions ────────────────────────────────────
   const alreadyFriends = Array.isArray(profile?.friends)

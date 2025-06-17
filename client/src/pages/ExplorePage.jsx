@@ -58,6 +58,7 @@ export default function ExplorePage() {
     setLoading(true);
     try {
       const pageSize = 100;
+      if (authLoading || !user) return;
       const { data: newPosts } = await api.get('/posts', {
         params: { offset, limit: pageSize }
       });
@@ -122,11 +123,12 @@ export default function ExplorePage() {
     );
     obs.observe(sentinelRef.current);
     return () => obs.disconnect();
-  }, [loading, hasMore]);
+  }, [loading, hasMore, authLoading]);
 
   // ─── Persist saved state whenever posts change ──────────────
   useEffect(() => {
     let isMounted = true;
+    if (authLoading || !user) return;
     api.get('/users/me/saves')
       .then(res => {
         if (!isMounted) return;
@@ -150,7 +152,7 @@ export default function ExplorePage() {
       })
       .catch(console.error);
     return () => { isMounted = false; };
-  }, [posts]);
+  }, [posts, user, authLoading]);
 
   // ─── Persist shared-flags ───────────────────────────────────
   useEffect(() => {

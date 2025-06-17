@@ -36,7 +36,7 @@ export default function PostCard({
   sharer,
   hideSaveButton = false,
 }) {
-  const { user } = useContext(AuthContext);
+  const { user, authLoading } = useContext(AuthContext);
 
   // === State ===
   const [liked, setLiked] = useState(Boolean(post.liked));
@@ -68,6 +68,7 @@ export default function PostCard({
   // Load comments when panel opens
   useEffect(() => {
     if (commentsOpen && comments.length === 0) {
+      if (authLoading || !user) return;
       api.get(`/comments/post/${post._id}`)
         .then(res => {
           const data = res.data || [];
@@ -79,16 +80,17 @@ export default function PostCard({
         })
         .catch(() => toast.error('Failed to load comments'));
     }
-  }, [commentsOpen, comments.length, post._id]);
+  }, [commentsOpen, comments.length, post._id, user, authLoading]);
 
   // Fetch share count if not a shared-preview stub
   useEffect(() => {
     if (!isSharedPreview) {
+      if (authLoading || !user) return;
       api.get(`/shares/${post._id}`)
         .then(res => setShareCount(res.data.count))
         .catch(() => { });
     }
-  }, [post._id, isSharedPreview]);
+  }, [post._id, isSharedPreview, user, authLoading]);
 
   // Render shared‐preview stub
   if (isSharedPreview && post.original && sharer) {

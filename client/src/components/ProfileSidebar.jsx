@@ -9,7 +9,7 @@ import defaultAvatar from '../assets/default-avatar.png';
 
 export default function ProfileSidebar({ profileUser }) {
   const { id } = useParams();
-  const { user: me } = useContext(AuthContext);
+  const { user: me, authLoading } = useContext(AuthContext);
 
   // profileUser prop wins (ProfilePage),
   // else if on /profile/:id we’ll fetch that,
@@ -30,14 +30,14 @@ export default function ProfileSidebar({ profileUser }) {
       setProfile(me);
       return;
     }
-    if (!me) return;
+    if (authLoading || !me) return;
     api.get(`/users/${userIdToFetch}`)
       .then(res => setProfile(res.data))
       .catch(() => {
         // on error just show whatever we had
         setProfile(me);
       });
-  }, [id, me, profileUser]);
+  }, [id, me, profileUser, authLoading]);
 
   const avatarSrc = profile?.avatarUrl?.trim()
     ? profile.avatarUrl

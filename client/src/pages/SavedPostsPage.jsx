@@ -31,9 +31,11 @@ export default function SavedPostsPage() {
     (async () => {
       setLoading(true);
       try {
+        if (authLoading || !user) return;
         const { data: saves } = await api.get('/users/me/saves');
         const detailed = await Promise.all(
           (saves || []).map(async raw => {
+            if (!user) return;
             const { data: full } = await api.get(`/posts/${raw._id}`);
             return { ...full, saved: true };
           })

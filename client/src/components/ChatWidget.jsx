@@ -18,7 +18,7 @@ import dayjs from 'dayjs';
 
 export default function ChatWidget() {
   const { socket, onlineUsers } = useSocket();
-  const { user: currentUser } = useContext(AuthContext);
+  const { user: currentUser, authLoading } = useContext(AuthContext);
 
   const [friends, setFriends] = useState([]);
   const [unreadCounts, setUnreadCounts] = useState({});
@@ -54,16 +54,18 @@ export default function ChatWidget() {
 
   // Load friend list
   useEffect(() => {
+    if (authLoading || !currentUser) return;
     api.get('/friends')
       .then(res => {
         console.log('Loaded friends:', res.data.friends);
         setFriends(res.data.friends);
       })
       .catch(console.error);
-  }, []);
+  }, [currentUser, authLoading]);
 
   // Fetch unread counts & listen for incoming DMs
   useEffect(() => {
+    if (authLoading || !currentUser) return;
     api.get('/messages/unread-counts')
       .then(res => {
         console.log('Initial unread-counts:', res.data);
@@ -83,7 +85,7 @@ export default function ChatWidget() {
     };
     socket.on('dm', handler);
     return () => socket.off('dm', handler);
-  }, [socket, currentUser.id]);
+  }, [socket, currentUser.id, currentUser, authLoading]);
 
   // Load conversation when a friend is selected
   useEffect(() => {
@@ -93,6 +95,7 @@ export default function ChatWidget() {
       setMessages([]);
       return;
     }
+    if (authLoading || !currentUser) return;
     api.get(`/messages/${activeFriend._id}`)
       .then(res => {
         console.log(`Loaded messages for ${activeFriend._id}:`, res.data);
@@ -103,7 +106,7 @@ export default function ChatWidget() {
         });
       })
       .catch(console.error);
-  }, [activeFriend]);
+  }, [activeFriend, currentUser, authLoading]);
 
   // Real-time incoming messages into open chat
   useEffect(() => {

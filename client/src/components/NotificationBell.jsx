@@ -8,21 +8,21 @@ import { api } from '../api';
 import defaultAvatar from '../assets/default-avatar.png';
 
 export default function NotificationBell() {
-  const { user } = useContext(AuthContext);
+  const { user, authLoading } = useContext(AuthContext);
   const [notes, setNotes] = useState([]);
   const [open, setOpen] = useState(false);
   const ref = useRef();
 
   // 1) Load all notifications when the user logs in
   useEffect(() => {
-    if (!user) return;
+    if (authLoading || !user) return;
     api.get('/notifications')
       .then(res => setNotes(res.data.notifications || []))
       .catch(err => {
         console.error('Could not fetch notifications:', err);
         toast.error('Failed to load notifications');
       });
-  }, [user]);
+  }, [user, authLoading]);
 
   // 2) Whenever you open the dropdown, mark *all* as read on the server
   //    then re-fetch so the badge and list stay in sync.
@@ -31,11 +31,12 @@ export default function NotificationBell() {
     api.patch('/notifications/mark-all-read')
       .catch(err => console.error('Could not mark notifications read:', err))
       .finally(() => {
+        if (authLoading || !user) return;
         api.get('/notifications')
           .then(res => setNotes(res.data.notifications || []))
           .catch(err => console.error('Could not refresh notifications:', err));
       });
-  }, [open]);
+  }, [open, user, authLoading]);
 
   // 3) Close dropdown if you click outside it
   useEffect(() => {

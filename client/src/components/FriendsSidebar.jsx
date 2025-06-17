@@ -7,10 +7,10 @@ import defaultAvatar from '../assets/default-avatar.png';
 export default function FriendsSidebar() {
   const [friends, setFriends] = useState([]);
   const [loading, setLoading] = useState(true);
-  const { user } = useContext(AuthContext);
+  const { user, authLoading } = useContext(AuthContext);
   useEffect(() => {
     let mounted = true;
-    if (!user) return;
+    if (authLoading || !user) return;
     api.get('/friends')
       .then(res => {
         if (mounted) setFriends(res.data.friends);
@@ -20,7 +20,7 @@ export default function FriendsSidebar() {
         if (mounted) setLoading(false);
       });
     return () => { mounted = false };
-  }, []);
+  }, [user, authLoading]);
 
   return (
     <div className="bg-base-100 dark:bg-base-300 w-68 p-4 mt-4 rounded-lg border border-base-content/10 shadow space-y-4">
