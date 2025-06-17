@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useContext } from 'react';
+import AuthContext from '../AuthContext';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
 import defaultAvatar from '../assets/default-avatar.png';
@@ -6,9 +7,10 @@ import defaultAvatar from '../assets/default-avatar.png';
 export default function FriendsSidebar() {
   const [friends, setFriends] = useState([]);
   const [loading, setLoading] = useState(true);
-
+  const { user } = useContext(AuthContext);
   useEffect(() => {
     let mounted = true;
+    if (!user) return;
     api.get('/friends')
       .then(res => {
         if (mounted) setFriends(res.data.friends);

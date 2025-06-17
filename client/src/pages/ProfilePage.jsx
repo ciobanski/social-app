@@ -7,6 +7,7 @@ import dayjs from 'dayjs';
 import customParseFormat from 'dayjs/plugin/customParseFormat';
 import { toast } from 'react-toastify';
 import { MdCake, MdPeople } from 'react-icons/md';
+import { FiCheck, FiUserMinus, FiArrowUp } from 'react-icons/fi';
 import { v4 as uuidv4 } from 'uuid';
 import AuthContext from '../AuthContext';
 import EditProfileModal from '../components/EditProfileModal';
@@ -19,69 +20,50 @@ export default function ProfilePage() {
   const { id } = useParams();
   const { user: me, reload: reloadMe } = useContext(AuthContext);
 
+  const [showScroll, setShowScroll] = useState(false);
   const [profile, setProfile] = useState(null);
   const [posts, setPosts] = useState([]);
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [loadingPosts, setLoadingPosts] = useState(true);
   const [editOpen, setEditOpen] = useState(false);
-
-  // Track whether we've sent a friend request
   const [requestSent, setRequestSent] = useState(false);
 
   const isMe = me?.id === id;
 
-  // ───── load user info ───────────────────────────────────────
+  // ─── scroll-to-top listener ────────────────────────────────
+  useEffect(() => {
+    const onScroll = () => setShowScroll(window.pageYOffset > 300);
+    window.addEventListener('scroll', onScroll);
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+  const scrollToTop = () =>
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+
+  // ─── Load profile info ──────────────────────────────────────
   useEffect(() => {
     setLoadingProfile(true);
     api.get(`/users/${id}`)
       .then(res => setProfile(res.data))
       .catch(err => {
         console.error(err);
-        toast.error(
-          err.response?.status === 404
-            ? 'User not found'
-            : 'Could not load profile'
-        );
+        toast.error(err.response?.status === 404 ? 'User not found' : 'Could not load profile');
       })
       .finally(() => setLoadingProfile(false));
   }, [id]);
 
-  // ───── load raw posts + share-stubs ───────────────────────────
+  // ─── Load **both** posts & shares in one go ─────────────────
   useEffect(() => {
     async function loadPostsAndShares() {
       setLoadingPosts(true);
       try {
-        const [myPostsRes, feedRes] = await Promise.all([
-          api.get(`/users/${id}/posts`),
-          api.get('/posts', { params: { limit: 1000 } })
-        ]);
-
-        // tag raw posts with type: 'post'
-        const rawPosts = myPostsRes.data.map(p => ({
-          ...p,
-          type: 'post',
-          saved: p.saved ?? false,
-          shared: false,
-        }));
-
-        // pick out only the share-stubs this user made
-        const shareStubs = feedRes.data
-          .filter(item =>
-            item.type === 'share' &&
-            (item.sharer._id ?? item.sharer.id) === id
-          )
-          .map(s => ({
-            ...s,
-            saved: s.saved ?? false,
-            shared: true,
-          }));
-
-        // merge & sort descending by createdAt
-        const merged = [...shareStubs, ...rawPosts].sort(
-          (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+        // fetch the unified feed (server already merged & sorted)
+        const { data: feed } = await api.get('/posts', { params: { limit: 1000 } });
+        // keep only items authored or shared by this profile
+        const combined = feed.filter(item =>
+          (item.type === 'post' && item.author._id === id) ||
+          (item.type === 'share' && item.sharer._id === id)
         );
-
-        setPosts(merged);
+        setPosts(combined);
       } catch (err) {
         console.error(err);
         toast.error('Could not load posts');
@@ -89,62 +71,31 @@ export default function ProfilePage() {
         setLoadingPosts(false);
       }
     }
-    loadPostsAndShares();
-  }, [id]);
+    if (me) loadPostsAndShares();
+  }, [id, me]);
 
-  // ───── Persist “saved” state on mount ────────────────────────
+  // ─── Refresh “saved” flags ───────────────────────────────────
   useEffect(() => {
     let isMounted = true;
     api.get('/users/me/saves')
       .then(res => {
         if (!isMounted) return;
-        const savedIds = new Set(
-          res.data
-            .filter(p => p && p._id)
-            .map(p => p._id)
-        );
-        setPosts(prev => {
-          let changed = false;
-          const updated = prev.map(p => {
-            const shouldBe = p.type === 'post' && savedIds.has(p._id);
-            if (p.saved !== shouldBe) {
-              changed = true;
-              return { ...p, saved: shouldBe };
-            }
-            return p;
-          });
-          return changed ? updated : prev;
-        });
-      })
-      .catch(console.error);
-    return () => { isMounted = false; };
-  }, []); // run once on mount
-
-  // ───── Persist “shared” state on mount ───────────────────────
-  useEffect(() => {
-    let isMounted = true;
-    api.get('/users/me/shares')
-      .then(res => {
-        if (!isMounted) return;
-        const sharedIds = new Set(
-          res.data
-            .filter(s => s.original && s.original._id)
-            .map(s => s.original._id)
-        );
+        const savedIds = new Set(res.data.map(p => p._id));
         setPosts(prev =>
           prev.map(p => ({
             ...p,
-            shared: p.type === 'post'
-              ? sharedIds.has(p._id)
-              : p.shared
+            saved: p.type === 'post' ? savedIds.has(p._id) : p.saved
           }))
         );
       })
       .catch(console.error);
     return () => { isMounted = false; };
-  }, []); // run once on mount
+  }, [posts]);
 
-  // ───── send friend request ───────────────────────────────────
+  // ─── Friendship actions ────────────────────────────────────
+  const alreadyFriends = Array.isArray(profile?.friends)
+    && profile.friends.map(String).includes(me?.id);
+
   const handleAddFriend = async () => {
     try {
       await api.post(`/friends/request/${id}`);
@@ -160,21 +111,30 @@ export default function ProfilePage() {
     }
   };
 
-  // ───── action handlers (mirror FeedPage) ────────────────────
+  const handleRemoveFriend = async () => {
+    try {
+      await api.delete(`/friends/${id}`);
+      toast.success('Friend removed');
+      setProfile(p => ({
+        ...p,
+        friendCount: (p.friendCount ?? 1) - 1,
+        friends: Array.isArray(p.friends)
+          ? p.friends.filter(fid => String(fid) !== me.id)
+          : p.friends
+      }));
+      if (typeof reloadMe === 'function') {
+        try { await reloadMe(); } catch { /* ignore */ }
+      }
+    } catch {
+      toast.error('Could not remove friend');
+    }
+  };
+
+  // ─── PostCard callbacks ────────────────────────────────────
   const handleLike = (postId, liked, cnt) =>
-    setPosts(ps =>
-      ps.map(p =>
-        p._id === postId ? { ...p, liked, likeCount: cnt } : p
-      )
-    );
-
+    setPosts(ps => ps.map(p => p._id === postId ? { ...p, liked, likeCount: cnt } : p));
   const handleSave = (postId, saved) =>
-    setPosts(ps =>
-      ps.map(p =>
-        p._id === postId ? { ...p, saved } : p
-      )
-    );
-
+    setPosts(ps => ps.map(p => p._id === postId ? { ...p, saved } : p));
   const handleShare = original => {
     const stubId = `stub-${uuidv4()}`;
     const stub = {
@@ -183,7 +143,9 @@ export default function ProfilePage() {
       sharer: { ...me },
       original,
       saved: false,
+      liked: false,
       createdAt: new Date().toISOString(),
+      shared: true,
     };
     setPosts(ps => [stub, ...ps]);
     api.post(`/shares/${original._id}`)
@@ -197,16 +159,9 @@ export default function ProfilePage() {
         setPosts(ps => ps.filter(x => x._id !== stubId));
       });
   };
-
   const handleReport = () => toast.success('Reported');
   const handleCommentAdded = postId =>
-    setPosts(ps =>
-      ps.map(p =>
-        p._id === postId
-          ? { ...p, commentCount: (p.commentCount || 0) + 1 }
-          : p
-      )
-    );
+    setPosts(ps => ps.map(p => p._id === postId ? { ...p, commentCount: (p.commentCount || 0) + 1 } : p));
   const handleDelete = async postId => {
     try {
       await api.delete(`/posts/${postId}`);
@@ -217,7 +172,7 @@ export default function ProfilePage() {
     }
   };
 
-  // ───── loading / error states ────────────────────────────────
+  // ─── Loading / not-found states ────────────────────────────
   if (loadingProfile) {
     return (
       <div className="flex justify-center items-center mt-8">
@@ -229,12 +184,8 @@ export default function ProfilePage() {
     return <p className="text-error text-center mt-8">User not found.</p>;
   }
 
-  // ───── formatters & fallbacks ───────────────────────────────
-  const avatarSrc =
-    typeof profile.avatarUrl === 'string' && profile.avatarUrl.trim()
-      ? profile.avatarUrl
-      : defaultAvatar;
-
+  // ─── Render ────────────────────────────────────────────────
+  const avatarSrc = profile.avatarUrl?.trim() ? profile.avatarUrl : defaultAvatar;
   const fmtDate = raw => {
     let d = dayjs(raw, 'DD-MM-YYYY HH:mm:ss', true);
     if (!d.isValid()) d = dayjs(raw);
@@ -243,7 +194,7 @@ export default function ProfilePage() {
 
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-      {/* ───── HEADER ─────────────────────────────────────────── */}
+      {/* HEADER */}
       <div className="flex flex-col sm:flex-row items-center sm:items-start justify-between gap-4">
         {/* Avatar */}
         <div className="flex-shrink-0">
@@ -256,58 +207,53 @@ export default function ProfilePage() {
             />
           </div>
         </div>
-
-        {/* Name, country, birthday, friends */}
+        {/* Info */}
         <div className="flex-1 text-center sm:text-left space-y-1">
           <h1 className="text-2xl font-semibold text-base-content">
             {profile.firstName} {profile.lastName}
           </h1>
           <p className="text-base-content/70">{profile.country || '—'}</p>
           {profile.birthday && (
-            <p className="text-base-content/70 flex items-center justify-center sm:justify-start gap-1">
+            <p className="text-base-content/70 flex items-center gap-1">
               <MdCake size={18} /> {fmtDate(profile.birthday)}
             </p>
           )}
-          <p className="text-base-content/70 flex items-center justify-center sm:justify-start gap-1">
-            <MdPeople size={18} /> Friends: {profile.friends?.length ?? 0}
+          <p className="text-base-content/70 flex items-center gap-1">
+            <MdPeople size={18} /> Friends: {profile.friendCount ?? 0}
           </p>
         </div>
-
-        {/* Edit vs. Add Friend / Block */}
+        {/* Actions */}
         <div className="flex flex-col space-y-2">
           {isMe ? (
-            <button
-              onClick={() => setEditOpen(true)}
-              className="btn btn-primary btn-sm"
-            >
+            <button onClick={() => setEditOpen(true)} className="btn btn-primary btn-sm">
               Edit Profile
             </button>
-          ) : (
+          ) : alreadyFriends ? (
             <>
-              <button
-                onClick={handleAddFriend}
-                disabled={requestSent}
-                className={`btn btn-outline btn-sm ${requestSent ? 'opacity-50 cursor-default' : ''
-                  }`}
-              >
-                {requestSent ? 'Requested' : 'Add Friend'}
+              <button disabled className="btn btn-secondary btn-sm opacity-50 cursor-default flex items-center gap-1">
+                <FiCheck size={16} /> Friends
               </button>
-              <button className="btn btn-outline btn-sm">
-                Block User
+              <button onClick={handleRemoveFriend} className="btn btn-outline btn-sm text-error flex items-center gap-1">
+                <FiUserMinus size={16} /> Remove Friend
               </button>
             </>
+          ) : (
+            <button
+              onClick={handleAddFriend}
+              disabled={requestSent}
+              className={`btn btn-outline btn-sm ${requestSent ? 'opacity-50 cursor-default' : ''}`}
+            >
+              {requestSent ? 'Requested' : 'Add Friend'}
+            </button>
           )}
         </div>
       </div>
 
-      {/* ───── POSTS LIST ─────────────────────────────────────── */}
+      {/* POSTS */}
       <div className="space-y-6">
         {loadingPosts ? (
           [0, 1, 2].map(i => (
-            <div
-              key={i}
-              className="h-48 bg-base-content/10 animate-pulse rounded-lg"
-            />
+            <div key={i} className="h-48 bg-base-content/10 animate-pulse rounded-lg" />
           ))
         ) : posts.length === 0 ? (
           <p className="text-base-content/60 text-center">No posts yet.</p>
@@ -329,7 +275,27 @@ export default function ProfilePage() {
         )}
       </div>
 
-      {/* ───── EDIT PROFILE MODAL ─────────────────────────────── */}
+      {/* Scroll-to-top */}
+      {showScroll && (
+        <button
+          onClick={scrollToTop}
+          className="
+                      fixed bottom-4 left-4 p-3
+                      bg-base-100 dark:bg-base-800
+                      rounded-sm
+                      border border-gray-300 dark:border-gray-600
+                      text-black dark:text-white
+                      shadow-lg
+                      hover:bg-base-200 dark:hover:bg-base-700
+                      transition-colors
+                      cursor-pointer
+                      "
+        >
+          <FiArrowUp size={24} color='#9f9f9f' />
+        </button>
+      )}
+
+      {/* EDIT PROFILE MODAL */}
       <EditProfileModal
         open={editOpen}
         onClose={() => setEditOpen(false)}

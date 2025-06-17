@@ -30,7 +30,9 @@ router.get('/:id', auth, async (req, res) => {
       firstName: user.firstName,
       lastName: user.lastName,
       avatarUrl: user.avatarUrl,
-      country: user.country
+      country: user.country,
+      friends: user.friends,              // array of ObjectIds
+      friendCount: user.friends.length,
     };
 
     // Own profile?  Always show birthday

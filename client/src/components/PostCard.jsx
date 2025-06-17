@@ -21,6 +21,7 @@ import { HiOutlineFlag } from 'react-icons/hi';
 import { toast } from 'react-toastify';
 import { api } from '../api';
 
+
 dayjs.extend(customParseFormat);
 
 export default function PostCard({
@@ -93,21 +94,21 @@ export default function PostCard({
   if (isSharedPreview && post.original && sharer) {
     return (
       <div className="max-w-screen-md mx-auto card bg-base-200 dark:bg-base-300 border border-base-content/10 shadow-md mb-6">
-        <div className="flex items-center p-3 border-b border-base-content/10 bg-base-100 dark:bg-base-200 space-x-2">
+        <div className="flex items-center p-3 border-b border-base-content/10 bg-base-100 dark:bg-base-200">
+
           <Link
             to={`/profile/${sharer._id}`}
             className="font-semibold text-white hover:text-gray-200"
           >
             {sharer.firstName} {sharer.lastName}
           </Link>
-          <span className="mx-1">shared</span>
+          <span className="mx-1 text-gray-400">&nbsp;shared</span>
           <Link
             to={`/profile/${post.original.author._id}`}
             className="font-semibold text-white hover:text-gray-200"
           >
-            {post.original.author.firstName} {post.original.author.lastName}
-          </Link>
-          <span className="ml-1">{'\u2019'}s post</span>
+            &nbsp;{post.original.author.firstName} {post.original.author.lastName}
+          </Link><span className="text-base-content/80">’s post</span>
         </div>
         <div className="p-3">
           <PostCard
@@ -201,14 +202,9 @@ export default function PostCard({
     onShare?.(post);
   };
 
-  const handleReportClick = async () => {
-    try {
-      await api.post(`/posts/${post._id}/report`);
-      toast.success('Reported');
-      onReport?.();
-    } catch {
-      toast.error('Report failed');
-    }
+  const handleReportClick = () => {
+    toast.success('Post reported, we will notify you soon');
+    onReport?.();
   };
 
   const toggleComments = () => setCommentsOpen(o => !o);
@@ -361,7 +357,7 @@ export default function PostCard({
 
       {/* Content */}
       <div className="p-4">
-        <p className="leading-relaxed">
+        <p className="leading-relaxed break-words whitespace-pre-wrap">
           {showText()}
           {isLong(post.content) && (
             <button

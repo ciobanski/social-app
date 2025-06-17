@@ -7,16 +7,15 @@ import Layout from './components/Layout';
 // lazy‐loaded pages
 const AuthPage = lazy(() => import('./pages/AuthPage'));
 const FeedPage = lazy(() => import('./pages/FeedPage'));
+const ExplorePage = lazy(() => import('./pages/ExplorePage'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
-const NotificationsPage = lazy(() => import('./pages/NotificationsPage'));
-const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
 const SavedPostsPage = lazy(() => import('./pages/SavedPostsPage'));
-const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
+const ResetPassword = lazy(() => import('./pages/ResetPasswordPage'));
+
 
 export default function AppRoutes() {
   const { user, authLoading } = useContext(AuthContext);
 
-  // 1️⃣ While we’re still checking session, don’t render ANYTHING:
   if (authLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -32,32 +31,30 @@ export default function AppRoutes() {
       </div>
     }>
       {user ? (
-        /* ───────────── PRIVATE ───────────── */
         <Routes>
           <Route element={<Layout />}>
-            <Route path="/" element={<FeedPage />} />
-            <Route path="/profile/:id" element={<ProfilePage />} />
+            {/* index = “/” */}
+            <Route index element={<FeedPage />} />
+
+            {/* /explore */}
+            <Route path="explore" element={<ExplorePage />} />
+
+            {/* /profile/:id */}
+            <Route path="profile/:id" element={<ProfilePage />} />
+
+            {/* /saved */}
             <Route path="saved" element={<SavedPostsPage />} />
-            <Route path="/notifications" element={<NotificationsPage />} />
-            {/* admin only */}
-            <Route
-              path="/admin"
-              element={
-                // 2️⃣ Optional‐chain here so we never do `null.role`
-                user?.role === 'admin'
-                  ? <AdminDashboard />
-                  : <Navigate to="/" />
-              }
-            />
-            <Route path="*" element={<Navigate to="/" />} />
+
+
+            {/* anything else → back to friends feed */}
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>
       ) : (
-        /* ───────────── PUBLIC ───────────── */
         <Routes>
           <Route path="/login" element={<AuthPage />} />
-          <Route path="/reset-password" element={<ResetPasswordPage />} />
-          <Route path="*" element={<Navigate to="/login" />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       )}
     </Suspense>

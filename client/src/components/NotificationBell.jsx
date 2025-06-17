@@ -1,4 +1,5 @@
 // src/components/NotificationBell.jsx
+
 import React, { useContext, useEffect, useState, useRef } from 'react';
 import { FiBell } from 'react-icons/fi';
 import { toast } from 'react-toastify';
@@ -12,7 +13,7 @@ export default function NotificationBell() {
   const [open, setOpen] = useState(false);
   const ref = useRef();
 
-  // Load all notifications when the user logs in
+  // 1) Load all notifications when the user logs in
   useEffect(() => {
     if (!user) return;
     api.get('/notifications')
@@ -23,21 +24,26 @@ export default function NotificationBell() {
       });
   }, [user]);
 
-  // Mark all as read locally when dropdown opens
+  // 2) Whenever you open the dropdown, mark *all* as read on the server
+  //    then re-fetch so the badge and list stay in sync.
   useEffect(() => {
-    if (open) {
-      setNotes(ns => ns.map(n => ({ ...n, read: true })));
-      // optional: api.patch('/notifications/mark-all-read').catch(console.error);
-    }
+    if (!open) return;
+    api.patch('/notifications/mark-all-read')
+      .catch(err => console.error('Could not mark notifications read:', err))
+      .finally(() => {
+        api.get('/notifications')
+          .then(res => setNotes(res.data.notifications || []))
+          .catch(err => console.error('Could not refresh notifications:', err));
+      });
   }, [open]);
 
-  // Close dropdown on outside click
+  // 3) Close dropdown if you click outside it
   useEffect(() => {
-    const handleClick = e => {
+    function handleClick(e) {
       if (ref.current && !ref.current.contains(e.target)) {
         setOpen(false);
       }
-    };
+    }
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
@@ -73,7 +79,6 @@ export default function NotificationBell() {
               (no notifications)
             </p>
           ) : (
-            /*  ← cap height here and make scrollable ↓ */
             <div className="max-h-[60vh] overflow-y-auto divide-y divide-base-content/10">
               {notes.map(note => {
                 const actor = note.entity?.from;
@@ -83,6 +88,7 @@ export default function NotificationBell() {
                   : 'Someone';
 
                 switch (note.type) {
+                  // 1) Incoming friend request
                   case 'friend_request':
                     return (
                       <div
@@ -109,7 +115,7 @@ export default function NotificationBell() {
                                   )
                                 )
                                 .then(() => toast.success('Friend request accepted'))
-                                .catch(() => toast.error('Could not accept request'))
+                                .catch(() => toast.error('Could not accept'))
                             }
                             className="btn btn-xs btn-circle btn-success"
                             title="Accept"
@@ -125,7 +131,7 @@ export default function NotificationBell() {
                                   )
                                 )
                                 .then(() => toast.success('Friend request rejected'))
-                                .catch(() => toast.error('Could not reject request'))
+                                .catch(() => toast.error('Could not reject'))
                             }
                             className="btn btn-xs btn-circle btn-error"
                             title="Reject"
@@ -136,6 +142,8 @@ export default function NotificationBell() {
                       </div>
                     );
 
+                  // 2) Friend-accepted (server emits type 'follow')
+                  case 'follow':
                   case 'friend_accept':
                     return (
                       <div
@@ -153,6 +161,7 @@ export default function NotificationBell() {
                       </div>
                     );
 
+                  // 3) Liked your post
                   case 'like':
                     return (
                       <div
@@ -170,6 +179,7 @@ export default function NotificationBell() {
                       </div>
                     );
 
+                  // 4) Commented on your post
                   case 'comment':
                     return (
                       <div
@@ -187,6 +197,45 @@ export default function NotificationBell() {
                       </div>
                     );
 
+                  // 5) Replied to your comment
+                  case 'reply':
+                  case 'comment_reply':
+                    return (
+                      <div
+                        key={note._id}
+                        className="flex items-center p-3 hover:bg-base-content/5 transition-colors"
+                      >
+                        <img
+                          src={avatar}
+                          alt=""
+                          className="w-8 h-8 rounded-full object-cover mr-3"
+                        />
+                        <span className="text-base-content">
+                          {name} replied to your comment
+                        </span>
+                      </div>
+                    );
+
+                  // 6) Liked your comment
+                  case 'comment_like':
+                  case 'like_comment':
+                    return (
+                      <div
+                        key={note._id}
+                        className="flex items-center p-3 hover:bg-base-content/5 transition-colors"
+                      >
+                        <img
+                          src={avatar}
+                          alt=""
+                          className="w-8 h-8 rounded-full object-cover mr-3"
+                        />
+                        <span className="text-base-content">
+                          {name} liked your comment
+                        </span>
+                      </div>
+                    );
+
+                  // 7) Shared your post
                   case 'share':
                     return (
                       <div

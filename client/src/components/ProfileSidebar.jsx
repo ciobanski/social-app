@@ -1,7 +1,7 @@
 // src/components/ProfileSidebar.jsx
 import React, { useEffect, useState, useContext } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { FiUser, FiSettings, FiCompass } from 'react-icons/fi';
+import { FiUser, FiCompass } from 'react-icons/fi';
 import { BsBookmark } from 'react-icons/bs';
 import AuthContext from '../AuthContext';
 import { api } from '../api';
@@ -30,7 +30,7 @@ export default function ProfileSidebar({ profileUser }) {
       setProfile(me);
       return;
     }
-
+    if (!me) return;
     api.get(`/users/${userIdToFetch}`)
       .then(res => setProfile(res.data))
       .catch(() => {
@@ -45,13 +45,12 @@ export default function ProfileSidebar({ profileUser }) {
 
   const links = [
     { label: 'View Profile', icon: <FiUser size={20} />, to: `/profile/${profile.id}` },
-    { label: 'Settings', icon: <FiSettings size={20} />, to: '/settings' },
     { label: 'Saved Posts', icon: <BsBookmark size={20} />, to: '/saved' },
     { label: 'Explore', icon: <FiCompass size={20} />, to: '/explore' },
   ];
 
   return (
-    <div className="card bg-base-200 dark:bg-base-300 p-4 border border-base-content/10 rounded-lg mt-4">
+    <div className="card bg-base-200 dark:bg-base-300 p-4 border border-base-content/10 rounded-lg mt-4 lg:-ml-4">
       <div className="flex flex-col items-center mb-6">
         <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-base-content mb-2">
           <img

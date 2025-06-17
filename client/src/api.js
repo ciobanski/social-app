@@ -2,8 +2,10 @@
 import axios from 'axios';
 
 export const api = axios.create({
-  baseURL: '/api',        // ← use the Vite proxy
-  withCredentials: true,
+  baseURL: import.meta.env.DEV
+    ? 'http://localhost:5000/api'
+    : '/api',
+  withCredentials: true
 });
 
 // 1️⃣ swallow only the /auth/me 401
@@ -21,7 +23,7 @@ api.interceptors.response.use(
   }
 );
 
-// 2️⃣ then your old request‐token interceptor
+// 2️⃣ then your old request-token interceptor
 api.interceptors.request.use(config => {
   const token = localStorage.getItem('authToken');
   if (token) config.headers.Authorization = `Bearer ${token}`;

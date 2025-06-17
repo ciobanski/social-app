@@ -1,4 +1,4 @@
-// src/pages/FeedPage.jsx
+// src/pages/ExplorePage.jsx
 
 import React, { useEffect, useState, useContext, useRef } from 'react';
 import { toast } from 'react-toastify';
@@ -11,17 +11,16 @@ import FriendsSidebar from '../components/FriendsSidebar';
 import NewPostBox from '../components/NewPostBox';
 import PostCard from '../components/PostCard';
 
-export default function FeedPage() {
+export default function ExplorePage() {
   const { user, authLoading } = useContext(AuthContext);
-  const [friends, setFriends] = useState([]);
   const [posts, setPosts] = useState([]);
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [showScroll, setShowScroll] = useState(false);
   const sentinelRef = useRef();
 
-  // ─── Scroll‐to‐top button visibility ────────────────────────
+  // ─── Scroll-to-top button visibility ───────────────────────
   useEffect(() => {
     const onScroll = () => setShowScroll(window.pageYOffset > 300);
     window.addEventListener('scroll', onScroll);
@@ -30,19 +29,7 @@ export default function FeedPage() {
   const scrollToTop = () =>
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
-  // ─── 1) Load friend‐IDs once ────────────────────────────────
-  useEffect(() => {
-    if (!user) return;
-    api.get('/friends')
-      .then(res => {
-        setFriends(
-          res.data.friends.map(f => f._id.toString())
-        );
-      })
-      .catch(() => toast.error('Could not load friends list'));
-  }, [user]);
-
-  // ─── Helper: shuffle an array in‐place (Fisher–Yates) ───────
+  // ─── Helper: shuffle array in-place (Fisher–Yates) ─────────
   const shuffleArray = arr => {
     for (let i = arr.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -51,7 +38,7 @@ export default function FeedPage() {
     return arr;
   };
 
-  // ─── Helper: merge, dedupe, then shuffle ────────────────────
+  // ─── Merge new batch, dedupe & shuffle ─────────────────────
   const mergePosts = newBatch => {
     setPosts(prev => {
       const combined = [...prev, ...newBatch];
@@ -65,71 +52,64 @@ export default function FeedPage() {
     });
   };
 
-  // ─── 2) Fetch next page, annotate, filter by your friends, then merge ─────────
+  // ─── Load next page from global feed ────────────────────────
   const loadPage = async () => {
-    if (loading || !hasMore || !user) return;
+    if (!hasMore) return;
     setLoading(true);
     try {
-      const pageSize = 25;
-      if (!user) return;
-      const { data: batch } = await api.get('/posts', {
+      const pageSize = 100;
+      const { data: newPosts } = await api.get('/posts', {
         params: { offset, limit: pageSize }
       });
 
-      const meId = user.id;
-      const allow = new Set([meId, ...friends]);
-
-      // which originals you've shared?
+      // build a set of originals the user has already shared
       const sharedSet = new Set(
-        batch
-          .filter(item =>
-            item.type === 'share' &&
-            item.sharer._id.toString() === meId
+        newPosts
+          .filter(
+            p =>
+              p.type === 'share' &&
+              ((p.sharer._id || p.sharer.id) === user.id)
           )
-          .map(item => item.original._id)
+          .map(p => p.original._id)
       );
 
-      // annotate .shared & filter by allow list
-      const filtered = batch
-        .map(item =>
-          item.type === 'share'
-            ? { ...item, shared: true }
-            : { ...item, shared: sharedSet.has(item._id) }
-        )
-        .filter(item => {
-          if (item.type === 'post') {
-            return allow.has(item.author._id.toString());
-          } else {
-            return allow.has(item.sharer._id.toString());
-          }
-        });
+      // annotate each post with .shared
+      const normalized = newPosts.map(p => {
+        if (p.type === 'share') {
+          return { ...p, shared: true };
+        } else {
+          return {
+            ...p,
+            shared: sharedSet.has(p._id),
+          };
+        }
+      });
 
-      if (batch.length < pageSize) setHasMore(false);
+      if (normalized.length < pageSize) setHasMore(false);
 
       // merge + dedupe + shuffle
-      mergePosts(filtered);
+      mergePosts(normalized);
 
-      // advance by however many came back
-      setOffset(o => o + batch.length);
+      setOffset(prev => prev + normalized.length);
     } catch (err) {
-      console.error('Feed load error:', err);
-      toast.error('Failed to load feed');
-      setHasMore(false);
+      console.error('Explore load error:', err);
+      toast.error('Failed to load explore feed');
     } finally {
       setLoading(false);
     }
   };
 
-  // ─── 3) Reset & load on login or when friend‐IDs arrive ─────
+  // ─── Initial / reset load ───────────────────────────────────
   useEffect(() => {
-    if (authLoading || !user || friends.length === 0) return;
+    if (authLoading) return;
+    if (!user) return;
     setPosts([]);
     setOffset(0);
     setHasMore(true);
     loadPage();
-  }, [user, authLoading, friends.join(',')]);
+  }, [user, authLoading]);
 
-  // ─── 4) Infinite‐scroll sentinel ───────────────────────────
+  // ─── Infinite-scroll sentinel ───────────────────────────────
   useEffect(() => {
     if (!sentinelRef.current) return;
     const obs = new IntersectionObserver(
@@ -144,57 +124,68 @@ export default function FeedPage() {
     return () => obs.disconnect();
   }, [loading, hasMore]);
 
-  // ─── 5) Refresh “saved” flags whenever posts change ─────────
+  // ─── Persist saved state whenever posts change ──────────────
   useEffect(() => {
-    if (!user) return;
+    let isMounted = true;
     api.get('/users/me/saves')
       .then(res => {
-        const savedIds = new Set(res.data.map(p => p._id));
-        setPosts(prev =>
-          prev.map(p =>
-            p.type === 'post'
-              ? { ...p, saved: savedIds.has(p._id) }
-              : p
-          )
+        if (!isMounted) return;
+        const savedIds = new Set(
+          res.data
+            .filter(p => p && p._id)
+            .map(p => p._id)
         );
+        setPosts(prev => {
+          let changed = false;
+          const updated = prev.map(p => {
+            const shouldBe = p.type === 'post' && savedIds.has(p._id);
+            if (p.saved !== shouldBe) {
+              changed = true;
+              return { ...p, saved: shouldBe };
+            }
+            return p;
+          });
+          return changed ? updated : prev;
+        });
       })
-      .catch(() => {
-        /* silently ignore */
-      });
+      .catch(console.error);
+    return () => { isMounted = false; };
   }, [posts]);
 
-  // ─── 6) Keep share‐flags in sync ───────────────────────────
+  // ─── Persist shared-flags ───────────────────────────────────
   useEffect(() => {
-    if (!user) return;
-    const meId = user.id;
     setPosts(prev => {
       const sharedIds = new Set(
         prev
-          .filter(p => p.type === 'share' && p.sharer._id.toString() === meId)
+          .filter(p => p.type === 'share' && p.sharer._id === user.id)
           .map(s => s.original._id)
       );
-      let dirty = false;
+      let changed = false;
       const updated = prev.map(p => {
         if (p.type === 'post') {
           const shouldBe = sharedIds.has(p._id);
           if (p.shared !== shouldBe) {
-            dirty = true;
+            changed = true;
             return { ...p, shared: shouldBe };
           }
         }
         return p;
       });
-      return dirty ? updated : prev;
+      return changed ? updated : prev;
     });
-  }, [posts, user]);
+  }, [posts, user.id]);
 
-  // ─── Handlers passed down to PostCard ──────────────────────
+  // ─── Handlers (identical to FeedPage) ───────────────────────
   const handleNewPost = newPost => {
-    if (newPost?._id) setPosts(prev => [newPost, ...prev]);
+    if (newPost?._id) {
+      setPosts(prev => [newPost, ...prev]);
+    }
   };
   const handleLike = (id, liked, cnt) =>
     setPosts(prev =>
-      prev.map(p => (p._id === id ? { ...p, liked, likeCount: cnt } : p))
+      prev.map(p =>
+        p._id === id ? { ...p, liked, likeCount: cnt } : p
+      )
     );
   const handleSave = (id, saved) =>
     setPosts(prev =>
@@ -217,14 +208,20 @@ export default function FeedPage() {
       createdAt: new Date().toISOString(),
       shared: true,
     };
-    setPosts(prev => [
-      stub,
-      ...prev.map(p =>
-        p._id === original._id
-          ? { ...p, shared: true, shareCount: (p.shareCount || 0) + 1 }
-          : p
-      ),
-    ]);
+    setPosts(prev =>
+      [
+        stub,
+        ...prev.map(p =>
+          p._id === original._id
+            ? {
+              ...p,
+              shared: true,
+              shareCount: (p.shareCount || 0) + 1,
+            }
+            : p
+        ),
+      ]
+    );
     api
       .post(`/shares/${original._id}`)
       .then(() => toast.success('Post shared'))
@@ -262,7 +259,7 @@ export default function FeedPage() {
     return (
       <div className="flex justify-center items-center h-full py-8">
         <p className="text-lg text-gray-400">
-          Please log in to see the feed.
+          Please log in to explore.
         </p>
       </div>
     );
@@ -270,62 +267,57 @@ export default function FeedPage() {
 
   return (
     <div className="mt-6 flex flex-col lg:flex-row max-w-screen-xl mx-auto px-4 gap-6">
-      {/* Left sidebar */}
       <div className="hidden lg:block lg:w-2/12">
         <ProfileSidebar />
       </div>
 
-      {/* Main feed */}
       <div className="w-full lg:w-8/12 bg-base-100 dark:bg-base-200 p-4 rounded-lg space-y-6">
         <NewPostBox onNewPost={handleNewPost} />
 
-        {posts.map(p => (
+        {posts.map(post => (
           <PostCard
-            key={p._id}
-            post={p}
+            key={post._id}
+            post={post}
             onLike={handleLike}
             onSave={handleSave}
             onShare={handleShare}
             onReport={handleReport}
             onCommentAdded={handleCommentAdded}
             onDelete={handleDelete}
-            isSharedPreview={p.type === 'share'}
-            sharer={p.sharer}
+            isSharedPreview={post.type === 'share'}
+            sharer={post.sharer}
           />
         ))}
 
         {loading &&
           [0, 1, 2].map(i => (
             <div
-              key={i}
+              key={`load-${i}`}
               className="h-48 bg-base-content/10 animate-pulse rounded-lg"
             />
           ))}
 
-        {/* infinite‐scroll sentinel */}
         <div ref={sentinelRef} />
       </div>
 
-      {/* Right sidebar */}
       <div className="hidden lg:block lg:w-2/12">
         <FriendsSidebar />
       </div>
 
-      {/* Scroll‐to‐top */}
       {showScroll && (
         <button
           onClick={scrollToTop}
           className="
-                     fixed bottom-4 left-4 p-3
-                     bg-base-100 dark:bg-base-800
-                     rounded-sm
-                     border border-gray-300 dark:border-gray-600
-                     text-black dark:text-white
-                     shadow-lg
-                     hover:bg-base-200 dark:hover:bg-base-700
-                     transition-colors
-                     cursor-pointer
-                     "
+                      fixed bottom-4 left-4 p-3
+                      bg-base-100 dark:bg-base-800
+                      rounded-sm
+                      border border-gray-300 dark:border-gray-600
+                      text-black dark:text-white
+                      shadow-lg
+                      hover:bg-base-200 dark:hover:bg-base-700
+                      transition-colors
+                      cursor-pointer
+                      "
         >
           <FiArrowUp size={24} color='#9f9f9f' />
         </button>

@@ -9,9 +9,8 @@ const Like = require('../models/Like');
 const Comment = require('../models/Comment');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
-const Hashtag = require('../models/Hashtag');
 const { canViewPost } = require('../utils/privacy');
-
+const auth = require('../middleware/auth');
 const router = express.Router();
 
 // Multer setup (unchanged)
@@ -166,6 +165,47 @@ router.get('/', authMiddleware, async (req, res) => {
   }
 });
 
+// ─── Friends‐only feed ─────────────────────────────────────────
+router.get('/friends', auth, async (req, res) => {
+  try {
+    // 1) parse pagination
+    const limit = Math.min(parseInt(req.query.limit, 10) || 10, 50);
+    const offset = parseInt(req.query.offset, 10) || 0;
+
+    // 2) load your friends list
+    const me = await User.findById(req.user._id).select('friends').lean();
+    const friendIds = Array.isArray(me.friends)
+      ? me.friends.map(id => id.toString())
+      : [];
+    // include yourself if you want your own posts here:
+    friendIds.push(req.user._id.toString());
+
+    // 3) fetch their posts (newest first), with skip/limit
+    let posts = await Post.find({ author: { $in: friendIds } })
+      .sort({ createdAt: -1 })
+      .skip(offset)
+      .limit(limit)
+      .populate('author', 'firstName lastName avatarUrl')
+      .lean();
+
+    // 4) (optional) privacy filter
+    if (typeof canViewPost === 'function') {
+      const viewer = req.user._id.toString();
+      const filtered = await Promise.all(
+        posts.map(async p => (await canViewPost(viewer, p) ? p : null))
+      );
+      posts = filtered.filter(Boolean);
+    }
+
+    // 5) return
+    return res.json(posts);
+  } catch (err) {
+    console.error('GET /api/posts/friends error:', err);
+    return res.status(500).json({ message: 'Could not load friends feed' });
+  }
+});
+
+
 // Get single post
 router.get('/:id', authMiddleware, async (req, res) => {
   try {
@@ -207,5 +247,6 @@ router.delete('/:id', authMiddleware, async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
+
 
 module.exports = router;

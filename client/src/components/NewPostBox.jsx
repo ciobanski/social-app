@@ -165,36 +165,43 @@ export default function NewPostBox({ onNewPost }) {
                 maxLength={CHARACTER_LIMIT}
                 onKeyDown={handleKeyDown}
               />
-              <icon-button
-                type="button"
-                onClick={handleEmojiClick}
-                className="absolute top-2 right-2 text-gray-600 dark:text-gray-300 hover:text-primary"
-                aria-label="Add emoji"
-              >
-                <FiSmile size={20} />
-              </icon-button>
-              {showEmojiPicker && (
-                <div className="absolute top-full right-2 mt-1 z-20 bg-base-300 dark:bg-base-800 p-2 rounded shadow-lg">
-                  <button
-                    type="button"
-                    onClick={() => setShowEmojiPicker(false)}
-                    className="float-right mb-1 text-white"
-                    aria-label="Close emoji picker"
-                  >
-                    <FiX size={20} />
-                  </button>
-                  <EmojiPicker
-                    onEmojiClick={onEmojiSelect}
-                    theme="dark"
-                  />
-                </div>
-              )}
+              <div className="relative inline-block">
+                <button
+                  type="button"
+                  onClick={handleEmojiClick}
+                  className="icon-button absolute top-2 right-2 text-gray-600 dark:text-gray-300 hover:text-primary"
+                  aria-label="Add emoji"
+                >
+                  <FiSmile size={20} />
+                </button>
+                {showEmojiPicker && (
+                  <div className="absolute top-full right-2 mt-1 mr-4 z-20 bg-base-600 dark:bg-base-800 p-2 rounded shadow-lg">
+                    <icon-button
+                      type="button"
+                      onClick={() => setShowEmojiPicker(false)}
+                      className="absolute top-1 right-3 btn btn-ghost p-0 m-0 btn-xs z-10"
+                      aria-label="Close emoji picker"
+                    >
+                      <FiX size={14} />
+                    </icon-button>
+                    <EmojiPicker className='emoji-picker'
+                      onEmojiClick={onEmojiSelect}
+                      theme="dark"
+                      emojiStyle='google'
+                      skinTonesDisabled='true'
+                    />
+                  </div>
+                )}
+              </div>
             </div>
-          )}
+          )
+          }
         />
-        {errors.content && (
-          <p className="text-error text-sm">{errors.content.message}</p>
-        )}
+        {
+          errors.content && (
+            <p className="text-error text-sm">{errors.content.message}</p>
+          )
+        }
         <div
           className={`text-sm ${content.length >= CHARACTER_LIMIT
             ? 'text-error'
@@ -204,15 +211,17 @@ export default function NewPostBox({ onNewPost }) {
           {content.length}/{CHARACTER_LIMIT}
         </div>
 
-        {uploadProgress > 0 && (
-          <progress
-            className="progress progress-primary w-full"
-            value={uploadProgress}
-            max="100"
-          >
-            {uploadProgress}%
-          </progress>
-        )}
+        {
+          uploadProgress > 0 && (
+            <progress
+              className="progress progress-primary w-full"
+              value={uploadProgress}
+              max="100"
+            >
+              {uploadProgress}%
+            </progress>
+          )
+        }
 
         <div className="flex justify-between items-center">
           <div className="flex space-x-2">
@@ -259,53 +268,55 @@ export default function NewPostBox({ onNewPost }) {
           onChange={onFileVideoChange}
         />
 
-        {previews.length > 0 && (
-          <div className="flex flex-wrap gap-2 mt-2">
-            {previews.slice(0, 4).map((p, i) => (
-              <div
-                key={i}
-                className="relative w-20 h-20 rounded-lg overflow-hidden bg-black"
-              >
-                {p.type === 'image' ? (
-                  <img
-                    src={p.src}
-                    alt=""
-                    className="w-full h-full object-contain"
-                  />
-                ) : (
-                  <video
-                    src={p.src}
-                    className="w-full h-full object-contain"
-                    muted
-                    loop
-                  />
-                )}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setFiles(f => f.filter((_, idx) => idx !== i));
-                    setPreviews(pr => pr.filter((_, idx) => idx !== i));
-                  }}
-                  className="icon-button absolute top-1 right-1 text-white"
-                  aria-label="Remove file"
+        {
+          previews.length > 0 && (
+            <div className="flex flex-wrap gap-2 mt-2">
+              {previews.slice(0, 4).map((p, i) => (
+                <div
+                  key={i}
+                  className="relative w-20 h-20 rounded-lg overflow-hidden bg-black"
                 >
-                  <FiX size={12} />
-                </button>
-              </div>
-            ))}
-            {previews.length > 4 && (
-              <div className="w-20 h-20 rounded-lg bg-black/50 flex items-center justify-center font-bold text-white">
-                +{previews.length - 4}
-              </div>
-            )}
-          </div>
-        )}
-      </form>
+                  {p.type === 'image' ? (
+                    <img
+                      src={p.src}
+                      alt=""
+                      className="w-full h-full object-contain"
+                    />
+                  ) : (
+                    <video
+                      src={p.src}
+                      className="w-full h-full object-contain"
+                      muted
+                      loop
+                    />
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFiles(f => f.filter((_, idx) => idx !== i));
+                      setPreviews(pr => pr.filter((_, idx) => idx !== i));
+                    }}
+                    className="icon-button absolute top-1 right-1 text-white"
+                    aria-label="Remove file"
+                  >
+                    <FiX size={12} />
+                  </button>
+                </div>
+              ))}
+              {previews.length > 4 && (
+                <div className="w-20 h-20 rounded-lg bg-black/50 flex items-center justify-center font-bold text-white">
+                  +{previews.length - 4}
+                </div>
+              )}
+            </div>
+          )
+        }
+      </form >
       {isDragActive && (
         <div className="absolute inset-0 bg-black bg-opacity-30 flex items-center justify-center">
           <p className="text-white text-lg">Drop files here</p>
         </div>
       )}
-    </div>
+    </div >
   );
 }

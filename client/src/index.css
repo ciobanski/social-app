@@ -9,6 +9,8 @@ body,
 #root {
   height: 100%;
   margin: 0;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
 }
 
 body {
@@ -18,7 +20,6 @@ body {
 }
 
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
   color-scheme: light dark;
@@ -40,35 +41,14 @@ a:hover {
   color: #7d82e0;
 }
 
-/* Base button styling */
-button {
-  border-radius: 8px;
-  border: 1px solid #444444;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  background-color: #1a1a1a;
-  cursor: pointer;
-  transition: border-color 0.25s;
-}
-
-button:hover {
-  border-color: #646cff;
-  background-color: #222222;
-}
-
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
-}
-
 /* Icon‐only button override */
 .icon-button {
   background-color: transparent !important;
   padding: 0 !important;
-  border: none !important;
   cursor: pointer;
+
+  /* Allow Tailwind’s text-* to control the color: */
+  color: inherit !important;
 }
 
 .icon-button:hover {
@@ -84,7 +64,6 @@ input.input {
   /* keep DaisyUI input rules */
 }
 
-
 .btn {
   --btn-shadow: none;
 }
@@ -97,18 +76,6 @@ input.input {
   :root {
     color: #213547;
     background-color: #ffffff;
-  }
-
-  a {
-    color: #000;
-  }
-
-  a:hover {
-    color: #7d82e0;
-  }
-
-  button {
-    background-color: #f9f9f9;
   }
 }
 
@@ -130,6 +97,57 @@ input.input {
   }
 }
 
+/* by default we show the white logo, hide the black one */
+.logo--white {
+  display: block;
+}
+
+.logo--black {
+  display: none;
+}
+
+/* when DaisyUI switches to light mode, flip them */
+html[data-theme="light"] .logo--white {
+  display: none;
+}
+
+html[data-theme="light"] .logo--black {
+  display: block;
+}
+
+
+/* when light mode is active, switch to black */
+html[data-theme="light"] .logo-icon {
+  color: #000 !important;
+}
+
 .shake {
   animation: shake 0.3s;
+}
+
+html[data-theme="light"] {
+  color: #213547 !important;
+  background-color: #ffffff !important;
+}
+
+html[data-theme="light"] a {
+  color: #000 !important;
+}
+
+html[data-theme="light"] a:hover {
+  color: #7d82e0 !important;
+}
+
+/* Make sure SVG icons inherit the correct color in light mode */
+html[data-theme="light"] .icon-button,
+html[data-theme="light"] .icon-button svg {
+  color: inherit !important;
+}
+
+
+html[data-theme="light"] .emoji-picker,
+html[data-theme="light"] .emoji-picker.h2 {
+  background-color: #fff;
+  color: #fff;
+  stroke: #fff;
 }

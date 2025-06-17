@@ -20,17 +20,12 @@ const Message = require('./models/Message');
 const authRoutes = require('./routes/auth');
 const postRoutes = require('./routes/posts');
 const commentRoutes = require('./routes/comments');
-const reportRoutes = require('./routes/reports');
-const adminRoutes = require('./routes/admin');
 const userRoutes = require('./routes/users');
 const likeRoutes = require('./routes/likes');
 const saveRoutes = require('./routes/saves');
-const hashtagRoutes = require('./routes/hashtags');
 const messageRoutes = require('./routes/messages');
 const shareRoutes = require('./routes/shares');
 const searchRoutes = require('./routes/search');
-const trendingRoutes = require('./routes/trending');
-const storiesRoutes = require('./routes/stories');
 const friendsRoutes = require('./routes/friends');
 const presenceRoutes = require('./routes/presence');
 const notificationsRoutes = require('./routes/notifications');
@@ -94,17 +89,12 @@ mongoose.connect(process.env.MONGO_URI)
 app.use('/api/auth', authRoutes);
 app.use('/api/posts', postRoutes);
 app.use('/api/comments', commentRoutes);
-app.use('/api/reports', reportRoutes);
-app.use('/api/admin', adminRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api', likeRoutes);       // e.g. POST /api/posts/:id/like
 app.use('/api', saveRoutes);       // e.g. POST /api/posts/:id/save
-app.use('/api/hashtags', hashtagRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/shares', shareRoutes);
 app.use('/api/search', searchRoutes);
-app.use('/api/trending', trendingRoutes);
-app.use('/api/stories', storiesRoutes);
 app.use('/api/friends', friendsRoutes);
 app.use('/api/presence', presenceRoutes);
 app.use('/api/notifications', notificationsRoutes);
@@ -137,17 +127,32 @@ io.on('connection', async socket => {
     io.to(fid.toString()).emit('presence', { userId: uid, isOnline: true });
   });
 
-  // DM receive/save/broadcast
-  socket.on('dm', async ({ to, content }) => {
+  socket.on('dm', async incoming => {
     try {
-      const msg = await Message.create({ from: uid, to, content });
-      await msg.populate('from', 'firstName lastName avatarUrl');
-      socket.emit('dm', msg);        // echo to sender
-      io.to(to).emit('dm', msg);     // send to recipient
+      // 1) save it to Mongo
+      const msg = await Message.create({
+        from: incoming.from,
+        to: incoming.to,
+        content: incoming.content || '',
+        read: false,
+        mediaUrls: incoming.mediaUrls || [],
+        mediaType: incoming.mediaType || null
+      });
+
+      // 2) populate sender info for client
+      const full = await msg
+        .populate('from', 'firstName lastName avatarUrl')
+        .execPopulate();
+
+      // 3) emit to recipient and back to sender (so both update)
+      socket.to(full.to.toString()).emit('dm', full);
+      socket.emit('dm', full);
+
     } catch (err) {
-      console.error('🛑 DM error:', err);
+      console.error('DM error:', err);
     }
   });
+
 
   socket.on('disconnect', async () => {
     onlineUsers.delete(uid);
