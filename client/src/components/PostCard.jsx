@@ -333,6 +333,8 @@ export default function PostCard({
               alt=""
               className="w-full h-96 object-contain cursor-pointer"
               onClick={() => openLightbox(media[carouselIdx].url)}
+              loading="lazy"
+              decoding="async"
             />
           ) : (
             <video
@@ -460,6 +462,8 @@ export default function PostCard({
                         src={parent.author.avatarUrl || '/default-avatar.png'}
                         alt=""
                         className="w-8 h-8 rounded-full object-cover"
+                        loading="lazy"
+                        decoding="async"
                       />
                       <div className="flex-1">
                         <div className="flex justify-between">
