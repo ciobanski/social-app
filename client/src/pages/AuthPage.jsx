@@ -10,7 +10,7 @@ import AuthContext from '../AuthContext';
 import { api } from '../api';
 import ForgotPasswordModal from '../components/ForgotPasswordModal';
 import TwoFactorModal from '../components/TwoFactorModal';
-
+import logo from '../assets/logo.svg';
 const BG_URL =
   'https://images.unsplash.com/photo-1668681919287-7367677cdc4c?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D';
 
@@ -100,12 +100,15 @@ export default function AuthPage() {
       <div className="absolute inset-0 bg-black/60 -z-10" />
 
       {/* left split text (desktop only) */}
-      <div className="hidden lg:flex w-1/2 items-center justify-end lg:pr-8">
-
-        <h2 className="max-w-lg break-words text-right text-7xl font-black leading-tight text-white">
-
-          Connecting people
-        </h2>
+      <div className="hidden lg:flex w-1/2 items-start justify-end lg:pr-16 pt-16">
+        <div className="flex flex-col items-end mb-42">
+          {/* larger logo */}
+          <img src={logo} alt="Socialite" className="h-44 -mr-28" />
+          {/* new catchphrase */}
+          <h2 className="w-100 break-words text-right text-8xl font-bold leading-tight text-white">
+            Share <br />your <br /> world.
+          </h2>
+        </div>
       </div>
 
       {/* right column */}

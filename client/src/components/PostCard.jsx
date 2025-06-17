@@ -96,21 +96,27 @@ export default function PostCard({
   if (isSharedPreview && post.original && sharer) {
     return (
       <div className="max-w-screen-md mx-auto card bg-base-200 dark:bg-base-300 border border-base-content/10 shadow-md mb-6">
-        <div className="flex items-center p-3 border-b border-base-content/10 bg-base-100 dark:bg-base-200">
-
-          <Link
-            to={`/profile/${sharer._id}`}
-            className="font-semibold text-white hover:text-gray-200"
-          >
-            {sharer.firstName} {sharer.lastName}
-          </Link>
-          <span className="mx-1 text-gray-400">&nbsp;shared</span>
-          <Link
-            to={`/profile/${post.original.author._id}`}
-            className="font-semibold text-white hover:text-gray-200"
-          >
-            &nbsp;{post.original.author.firstName} {post.original.author.lastName}
-          </Link><span className="text-base-content/80">’s post</span>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center p-3 border-b border-base-content/10 bg-base-100 dark:bg-base-200">
+          {/* line 1 */}
+          <div className="flex items-center">
+            <Link
+              to={`/profile/${sharer._id}`}
+              className="font-semibold text-white hover:text-gray-200"
+            >
+              {sharer.firstName} {sharer.lastName}
+            </Link>
+            <span className="mx-1 text-gray-400">shared</span>
+          </div>
+          {/* line 2 on mobile, same row on sm+: */}
+          <div className="flex items-center mt-1 sm:mt-0 sm:ml-2">
+            <Link
+              to={`/profile/${post.original.author._id}`}
+              className="font-semibold text-white hover:text-gray-200"
+            >
+              {post.original.author.firstName} {post.original.author.lastName}
+            </Link>
+            <span className="text-base-content/80">’s post</span>
+          </div>
         </div>
         <div className="p-3">
           <PostCard

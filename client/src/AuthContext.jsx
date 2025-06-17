@@ -28,30 +28,26 @@ export function AuthProvider({ children }) {
 
   // On mount: rehydrate token & ping /auth/me
   useEffect(() => {
+    // if we have a legacy header token, put it on every request
     const stored = localStorage.getItem('authToken');
     if (stored) {
-      // rehydrate header token
       api.defaults.headers.common.Authorization = `Bearer ${stored}`;
-      // only now do we check /auth/me
-      api
-        .get('/auth/me', { withCredentials: true })
-        .then(({ data }) => {
-          setUser(data.user);
-        })
-        .catch(err => {
-          // if 401, we simply drop to logged‐out state
-          if (err.response?.status !== 401) console.error(err);
-          setToken(null);
-          setUser(null);
-        })
-        .finally(() => {
-          setAuthLoading(false);
-        });
-    } else {
-      // no stored token → don’t even hit /auth/me
-      setUser(null);
-      setAuthLoading(false);
     }
+
+    // always ask the server “who am I?” so that cookie-only sessions work
+    api
+      .get('/auth/me', { withCredentials: true })
+      .then(({ data }) => {
+        setUser(data.user);
+      })
+      .catch(err => {
+        if (err.response?.status !== 401) console.error(err);
+        setUser(null);
+        setToken(null);
+      })
+      .finally(() => {
+        setAuthLoading(false);
+      });
   }, []);
 
   // LOGIN
